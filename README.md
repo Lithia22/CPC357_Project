@@ -4,49 +4,11 @@
 
 IoT gas leak detection system with ESP32 hardware, GCP cloud backend, React dashboard, Supabase database and automatic safety shutoff.
 
-## Project Structure
-
-```
-CPC357_Project/
-├── ESP32-Code/                # microcontroller codes
-│   ├── include/config.h       # WiFi, MQTT, pin configurations
-│   └── src/main.cpp           # Main sensor logic & safety controls
-│
-├── frontend/
-│   ├── src/                  # React web dashboard
-│   │   ├── components/       # UI components (Header, Sidebar)
-│   │   ├── pages/            # Main views (Dashboard, Charts, Alerts)
-│   │   ├── services/         # MQTT & Supabase connection services
-│   │   ├── App.js            # Main app routing
-│   │   └── index.js          # React entry point
-│   └── package.json
-│
-├── backend/                  # GCP VM services
-    ├── mqtt-bridge.js        # MQTT to Supabase data bridge
-    └── package.json          # Node.js dependencies
-```
-
-## Hardware Setup
-
-### Required Components:
-
-1. **ESP32 Dev Board**
-2. **MQ-2 Gas Sensor**
-3. **DHT11 Temperature Sensor**
-4. **Active Buzzer**
-5. **SG90 Servo**
-6. **5V Relay**
-7. **Push Button**
-
-### Wiring Configuration:
-
-See `ESP32-Code/include/config.h` for pin mappings.
-
 ## Setup Instructions
 
 ### Step 1: Configure ESP32
 
-1. Open `ESP32-Code/include/config.h`
+1. Open `ESP32/include/config.h`
 2. Update these values:
 
 ```cpp
@@ -281,7 +243,7 @@ npm start
 
 ### Step 6: ESP32 Firmware Upload
 
-1. Open `ESP32-Code` in VS Code with PlatformIO extension
+1. Open `ESP32` in VS Code with PlatformIO extension
 2. Click ✓ button to compile
 3. Connect ESP32 via USB
 4. Click ➔ button to upload

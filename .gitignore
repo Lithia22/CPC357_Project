@@ -17,8 +17,8 @@ frontend/build/
 dist/
 
 # ESP32
-ESP32-Code/.pio/
-ESP32-Code/.vscode/
+ESP32/.pio/
+ESP32/.vscode/
 
 # Logs
 *.log
