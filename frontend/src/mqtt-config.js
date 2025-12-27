@@ -1,6 +1,3 @@
-// frontend/src/mqtt-config.js
-// Import this file BEFORE any MQTT imports in your index.js
-
 // Polyfill Buffer for MQTT
 import { Buffer } from "buffer";
 window.Buffer = Buffer;

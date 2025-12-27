@@ -19,7 +19,6 @@ dist/
 # ESP32
 ESP32-Code/.pio/
 ESP32-Code/.vscode/
-ESP32-Code/include/config.h
 
 # Logs
 *.log

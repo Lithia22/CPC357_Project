@@ -5,7 +5,6 @@
 #include <DHT.h>
 #include "config.h"
 
-// Function declarations
 void setupWiFi();
 void mqttCallback(char *topic, byte *payload, unsigned int length);
 void reconnectMQTT();
@@ -13,20 +12,19 @@ void readSensors();
 void processGasReading();
 void handleButtonPress();
 void activateSafetyMode();
+void deactivateSafetyMode();
 void cookingModeLogic();
 void publishData();
 void publishAlert(const char *message, int gasLevel);
 void beepBuzzer(int times, int duration);
 
-// Global objects
 WiFiClient wifiClient;
 PubSubClient mqttClient(wifiClient);
 DHT dht(DHT11_PIN, DHT11);
 Servo lpgValve;
 
-// Global variables
 int gasValue = 0;
-float temperature = 0;
+float temperature = 25.0;
 int adjustedThreshold = GAS_THRESHOLD_NORMAL;
 bool isCookingMode = false;
 bool gasAlertActive = false;
@@ -34,41 +32,44 @@ unsigned long lastGasAlertTime = 0;
 unsigned long lastMqttPublish = 0;
 unsigned long lastButtonCheck = 0;
 bool buttonPressed = false;
-bool cookingMediumActive = false; // NEW: Track if in medium level
+bool cookingMediumActive = false;
+bool valveClosed = false;
 
 void setup()
 {
     Serial.begin(115200);
+    delay(1000);
     Serial.println("=== Gas Leak Detection System Starting ===");
 
-    // Setup pins
     pinMode(MQ2_PIN, INPUT);
     pinMode(BUZZER_PIN, OUTPUT);
     pinMode(RELAY_PIN, OUTPUT);
     pinMode(BUTTON_PIN, INPUT_PULLUP);
 
-    // Initialize components
     dht.begin();
-    lpgValve.attach(SERVO_PIN);
-    lpgValve.write(VALVE_OPEN);
+    delay(2000);
 
-    // Turn off everything initially
+    lpgValve.attach(SERVO_PIN);
+    delay(500);
+    lpgValve.write(VALVE_OPEN);
+    Serial.println("Servo initialized to OPEN position");
+
     digitalWrite(BUZZER_PIN, LOW);
     digitalWrite(RELAY_PIN, LOW);
 
-    // Connect to WiFi
     setupWiFi();
 
-    // Setup MQTT
     mqttClient.setServer(MQTT_SERVER, MQTT_PORT);
     mqttClient.setCallback(mqttCallback);
 
-    // Startup beep
     beepBuzzer(2, 100);
 
     Serial.println("System Ready!");
-    Serial.println("Current Mode: NON-COOKING (Full protection)");
-    Serial.println("Press button to toggle COOKING MODE");
+    Serial.println("Current Mode: NON-COOKING");
+    Serial.println("Press button to toggle between COOKING and NON-COOKING mode");
+    Serial.println("");
+    Serial.println("COOKING MODE: Valve stays OPEN unless EXTREME danger (>3000 PPM)");
+    Serial.println("NON-COOKING MODE: Valve closes on any gas leak (>1000 PPM)");
     Serial.print("Connected to MQTT Server: ");
     Serial.println(MQTT_SERVER);
     Serial.println("======================================");
@@ -76,14 +77,12 @@ void setup()
 
 void loop()
 {
-    // Maintain MQTT connection
     if (!mqttClient.connected())
     {
         reconnectMQTT();
     }
     mqttClient.loop();
 
-    // Read sensors every second
     static unsigned long lastSensorRead = 0;
     if (millis() - lastSensorRead >= SENSOR_READ_INTERVAL)
     {
@@ -91,13 +90,9 @@ void loop()
         lastSensorRead = millis();
     }
 
-    // Check button for mode toggle
     handleButtonPress();
-
-    // Process gas reading based on mode
     processGasReading();
 
-    // Publish data to MQTT every SECOND (changed from 5 seconds)
     if (millis() - lastMqttPublish >= MQTT_UPDATE_INTERVAL)
     {
         publishData();
@@ -136,9 +131,8 @@ void setupWiFi()
 
 void mqttCallback(char *topic, byte *payload, unsigned int length)
 {
-    // Convert payload to string
     String message;
-    for (int i = 0; i < length; i++)
+    for (unsigned int i = 0; i < length; i++)
     {
         message += (char)payload[i];
     }
@@ -148,140 +142,146 @@ void mqttCallback(char *topic, byte *payload, unsigned int length)
     Serial.print("]: ");
     Serial.println(message);
 
-    // Handle commands from web app
     String topicStr = String(topic);
 
     if (topicStr == TOPIC_ACTUATOR_CMD)
     {
         if (message == "emergency_stop")
         {
-            Serial.println("Emergency stop command received!");
+            Serial.println("Emergency stop command received from web!");
             activateSafetyMode();
         }
         else if (message == "toggle_mode")
         {
             isCookingMode = !isCookingMode;
-            Serial.print("Mode changed to: ");
-            Serial.println(isCookingMode ? "COOKING" : "NON-COOKING");
-        }
-        else if (message == "valve_open")
-        {
-            lpgValve.write(VALVE_OPEN);
-            Serial.println("Valve opened manually");
-        }
-        else if (message == "valve_close")
-        {
-            lpgValve.write(VALVE_CLOSED);
-            Serial.println("Valve closed manually");
+
+            Serial.println("==================================");
+            Serial.print("Mode changed via WEB to: ");
+            Serial.println(isCookingMode ? "COOKING MODE" : "NON-COOKING MODE");
+            Serial.println("==================================");
+
+            String modeMsg = isCookingMode ? "cooking_mode" : "non_cooking_mode";
+            mqttClient.publish(TOPIC_MODE_STATUS, modeMsg.c_str());
+
+            if (!isCookingMode)
+            {
+                digitalWrite(RELAY_PIN, LOW);
+                digitalWrite(BUZZER_PIN, LOW);
+                if (!valveClosed)
+                {
+                    lpgValve.write(VALVE_OPEN);
+                }
+                cookingMediumActive = false;
+                gasAlertActive = false;
+            }
         }
     }
 }
 
 void reconnectMQTT()
 {
-    while (!mqttClient.connected())
+    static unsigned long lastAttempt = 0;
+    if (millis() - lastAttempt < 5000)
+        return;
+
+    lastAttempt = millis();
+    Serial.print("Attempting MQTT connection...");
+
+    String clientId = "ESP32-GasDetector-";
+    clientId += String(random(0xffff), HEX);
+
+    if (mqttClient.connect(clientId.c_str(), MQTT_USER, MQTT_PASSWORD))
     {
-        Serial.print("Attempting MQTT connection...");
-
-        // Generate client ID
-        String clientId = "ESP32-GasDetector-";
-        clientId += String(random(0xffff), HEX);
-
-        // Attempt connection
-        if (mqttClient.connect(clientId.c_str(), MQTT_USER, MQTT_PASSWORD))
-        {
-            Serial.println("MQTT Connected!");
-
-            // Subscribe to command topic
-            mqttClient.subscribe(TOPIC_ACTUATOR_CMD);
-
-            // Publish connection status
-            mqttClient.publish("system/status", "connected");
-        }
-        else
-        {
-            Serial.print("Failed, rc=");
-            Serial.print(mqttClient.state());
-            Serial.println(" Retrying in 5s...");
-            delay(5000);
-        }
+        Serial.println("MQTT Connected!");
+        mqttClient.subscribe(TOPIC_ACTUATOR_CMD);
+        mqttClient.publish("system/status", "connected");
+    }
+    else
+    {
+        Serial.print("Failed, rc=");
+        Serial.println(mqttClient.state());
     }
 }
 
 void readSensors()
 {
-    // Read gas sensor
     gasValue = analogRead(MQ2_PIN);
 
-    // Read temperature
     float temp = dht.readTemperature();
-    if (!isnan(temp))
+
+    if (!isnan(temp) && temp > 0 && temp < 80)
     {
         temperature = temp;
-
-        // Adjust threshold based on temperature
-        if (temperature > HOT_TEMP)
-        {
-            adjustedThreshold = GAS_THRESHOLD_NORMAL * HOT_FACTOR;
-        }
-        else if (temperature < COLD_TEMP)
-        {
-            adjustedThreshold = GAS_THRESHOLD_NORMAL * COLD_FACTOR;
-        }
-        else
-        {
-            adjustedThreshold = GAS_THRESHOLD_NORMAL;
-        }
     }
 
-    // Print status to serial
+    if (temperature > HOT_TEMP)
+    {
+        adjustedThreshold = GAS_THRESHOLD_NORMAL * HOT_FACTOR;
+    }
+    else if (temperature < COLD_TEMP)
+    {
+        adjustedThreshold = GAS_THRESHOLD_NORMAL * COLD_FACTOR;
+    }
+    else
+    {
+        adjustedThreshold = GAS_THRESHOLD_NORMAL;
+    }
+
     Serial.print("Gas: ");
     Serial.print(gasValue);
     Serial.print(" | Temp: ");
     Serial.print(temperature);
-    Serial.print("C | Thresh: ");
     Serial.print(adjustedThreshold);
     Serial.print(" | Mode: ");
-    Serial.println(isCookingMode ? "COOKING" : "NON-COOKING");
+    Serial.print(isCookingMode ? "COOKING" : "NON-COOKING");
+    Serial.print(" | Valve: ");
+    Serial.println(valveClosed ? "CLOSED" : "OPEN");
 }
 
 void handleButtonPress()
 {
     bool currentButtonState = (digitalRead(BUTTON_PIN) == LOW);
 
-    // Detect button press with debounce
     if (currentButtonState && !buttonPressed && (millis() - lastButtonCheck > 300))
     {
         buttonPressed = true;
         lastButtonCheck = millis();
 
-        // Toggle mode
         isCookingMode = !isCookingMode;
 
-        // Beep confirmation
         beepBuzzer(1, 100);
 
-        // Print mode change
         Serial.println("==================================");
-        Serial.print("Mode changed to: ");
+        Serial.print("BUTTON PRESSED - Mode changed to: ");
         Serial.println(isCookingMode ? "COOKING MODE" : "NON-COOKING MODE");
+
+        if (isCookingMode)
+        {
+            Serial.println("Valve will STAY OPEN for normal cooking");
+            Serial.println("Only closes if gas exceeds 3000 PPM");
+        }
+        else
+        {
+            Serial.println("Valve closes on ANY gas leak > threshold");
+        }
         Serial.println("==================================");
 
-        // Publish mode change to MQTT
         String modeMsg = isCookingMode ? "cooking_mode" : "non_cooking_mode";
         mqttClient.publish(TOPIC_MODE_STATUS, modeMsg.c_str());
 
-        // Reset when switching to non-cooking mode
         if (!isCookingMode)
         {
             digitalWrite(RELAY_PIN, LOW);
             digitalWrite(BUZZER_PIN, LOW);
-            lpgValve.write(VALVE_OPEN);
+            if (!valveClosed)
+            {
+                lpgValve.write(VALVE_OPEN);
+            }
             cookingMediumActive = false;
+            gasAlertActive = false;
         }
     }
 
-    // Update button state
     if (!currentButtonState && buttonPressed)
     {
         buttonPressed = false;
@@ -292,19 +292,17 @@ void processGasReading()
 {
     if (!isCookingMode)
     {
-        // NON-COOKING MODE: Full protection
         if (gasValue > adjustedThreshold)
         {
             if (!gasAlertActive)
             {
                 gasAlertActive = true;
                 lastGasAlertTime = millis();
-                Serial.println("GAS LEAK DETECTED!");
-                publishAlert("Gas leak detected!", gasValue);
+                Serial.println("GAS LEAK DETECTED in NON-COOKING MODE!");
+                publishAlert("Gas leak detected in NON-COOKING mode!", gasValue);
                 beepBuzzer(3, 200);
             }
 
-            // If gas persists for 2 seconds, activate safety
             if (gasAlertActive && (millis() - lastGasAlertTime > ALARM_DELAY_MS))
             {
                 activateSafetyMode();
@@ -312,110 +310,135 @@ void processGasReading()
         }
         else
         {
-            if (gasAlertActive)
+            if (gasAlertActive || valveClosed)
             {
                 gasAlertActive = false;
                 Serial.println("Gas level returned to normal");
-                publishAlert("Gas level normal", gasValue);
-
-                // Reset safety measures
-                digitalWrite(BUZZER_PIN, LOW);
-                lpgValve.write(VALVE_OPEN);
-                digitalWrite(RELAY_PIN, LOW);
+                publishAlert("Gas level normal - System reset", gasValue);
+                deactivateSafetyMode();
             }
         }
     }
     else
     {
-        // COOKING MODE: Smart handling
         cookingModeLogic();
     }
 }
 
 void cookingModeLogic()
 {
-    // LEVEL 1: Normal (< 1000) - Everything off
     if (gasValue < GAS_THRESHOLD_NORMAL)
     {
-        if (cookingMediumActive)
+        if (cookingMediumActive || valveClosed)
         {
-            Serial.println("Gas returned to normal level - Turning off fan and buzzer");
+            Serial.println("======================================");
+            Serial.println("Gas returned to NORMAL level");
+            Serial.println("Turning off fan and buzzer");
+
+            if (valveClosed)
+            {
+                Serial.println("REOPENING valve for cooking");
+            }
+
+            Serial.println("STAYING IN COOKING MODE");
+            Serial.println("======================================");
+
             cookingMediumActive = false;
+            deactivateSafetyMode();
         }
+
         digitalWrite(RELAY_PIN, LOW);
         digitalWrite(BUZZER_PIN, LOW);
     }
-    // LEVEL 2: Medium (1000-3000) - Fan on, CONTINUOUS BUZZER
     else if (gasValue >= GAS_THRESHOLD_NORMAL && gasValue < GAS_THRESHOLD_HIGH)
     {
         if (!cookingMediumActive)
         {
-            Serial.println("MEDIUM LEVEL - Fan ON, Continuous BUZZER");
+            Serial.println("======================================");
+            Serial.println("MEDIUM GAS LEVEL (Normal for cooking)");
+            Serial.println("Fan: ON | Buzzer: CONTINUOUS");
+            Serial.println("Valve: STAYS OPEN - Cooking can continue");
+            Serial.println("Mode: COOKING");
+            Serial.println("======================================");
             cookingMediumActive = true;
+            publishAlert("Medium gas level during cooking - Normal operation", gasValue);
         }
+
         digitalWrite(RELAY_PIN, HIGH);
-        digitalWrite(BUZZER_PIN, HIGH); // CONTINUOUS BUZZER
+        digitalWrite(BUZZER_PIN, HIGH);
     }
-    // LEVEL 3: High (> 3000) - Emergency override
     else if (gasValue >= GAS_THRESHOLD_HIGH)
     {
-        Serial.println("EMERGENCY! High gas during cooking!");
-        publishAlert("EMERGENCY: High gas during cooking!", gasValue);
-
-        // Switch to non-cooking mode for safety
-        isCookingMode = false;
-        cookingMediumActive = false;
-        activateSafetyMode();
+        if (!valveClosed)
+        {
+            Serial.println("======================================");
+            Serial.println("!!! EXTREME DANGER !!!");
+            Serial.println("Gas level TOO HIGH for safe cooking!");
+            Serial.println("CLOSING VALVE for safety");
+            Serial.println("Fan: ON | Buzzer: ON");
+            Serial.println("Mode: STAYS IN COOKING");
+            Serial.println("Valve will reopen when gas drops below 3000");
+            Serial.println("======================================");
+            publishAlert("EXTREME DANGER: Gas too high, valve closed!", gasValue);
+            activateSafetyMode();
+        }
     }
 }
 
 void activateSafetyMode()
 {
-    Serial.println("ACTIVATING SAFETY MEASURES");
+    if (valveClosed)
+        return;
 
-    // 1. Continuous alarm
+    valveClosed = true;
+
     digitalWrite(BUZZER_PIN, HIGH);
 
-    // 2. Close gas valve
     lpgValve.write(VALVE_CLOSED);
+    delay(500);
+    Serial.print("Valve closed - Position: ");
+    Serial.println(lpgValve.read());
 
-    // 3. Turn on exhaust fan
     digitalWrite(RELAY_PIN, HIGH);
 
-    // Publish emergency alert
-    publishAlert("SAFETY MODE ACTIVATED - Gas shutoff", gasValue);
+    publishAlert("SAFETY: Valve closed due to high gas", gasValue);
+    mqttClient.publish(TOPIC_GAS_ALERT, "Gas valve closed for safety");
+}
 
-    // Send MQTT emergency notification
-    mqttClient.publish(TOPIC_GAS_ALERT, "EMERGENCY: Gas shutoff activated");
+void deactivateSafetyMode()
+{
+    if (!valveClosed)
+        return;
 
-    Serial.println("Valve: CLOSED");
-    Serial.println("Fan: ON");
-    Serial.println("Alarm: ON");
-    Serial.println("Gas supply shut off!");
+    valveClosed = false;
+
+    digitalWrite(BUZZER_PIN, LOW);
+    digitalWrite(RELAY_PIN, LOW);
+
+    lpgValve.write(VALVE_OPEN);
+    delay(500);
+    Serial.print("Valve reopened - Position: ");
+    Serial.println(lpgValve.read());
+
+    publishAlert("System reset - Valve reopened", gasValue);
+    mqttClient.publish(TOPIC_GAS_ALERT, "Gas valve reopened - Safe to continue");
 }
 
 void publishData()
 {
-    // Create JSON-like string manually
     char dataBuffer[256];
 
-    // Gas sensor data - UPDATED EVERY SECOND
     snprintf(dataBuffer, sizeof(dataBuffer),
              "{\"gas\":%d,\"temp\":%.1f,\"threshold\":%d,\"mode\":\"%s\",\"valve\":\"%s\",\"fan\":%d,\"buzzer\":%d}",
              gasValue,
              temperature,
              adjustedThreshold,
              isCookingMode ? "cooking" : "non_cooking",
-             (lpgValve.read() == VALVE_CLOSED) ? "closed" : "open",
+             valveClosed ? "closed" : "open",
              digitalRead(RELAY_PIN),
-             digitalRead(BUZZER_PIN)); // Added buzzer status
+             digitalRead(BUZZER_PIN));
 
     mqttClient.publish(TOPIC_GAS_DATA, dataBuffer);
-
-    // Also send separate temperature data
-    char tempBuffer[50];
-    snprintf(tempBuffer, sizeof(tempBuffer), "%.1f", temperature);
-    mqttClient.publish("temperature/data", tempBuffer);
 }
 
 void publishAlert(const char *message, int gasLevel)

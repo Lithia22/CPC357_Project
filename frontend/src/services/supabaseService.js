@@ -1,49 +1,35 @@
-// frontend/src/services/supabaseService.js
 import { createClient } from "@supabase/supabase-js";
 
-// Get environment variables with fallbacks
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
 const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
 
-// Validate environment variables
 if (!supabaseUrl || supabaseUrl === "your_supabase_url_here") {
-  console.error("❌ Missing Supabase URL. Please update your .env.local file");
-  console.error("Current value:", supabaseUrl);
+  console.error("Missing Supabase URL. Please update your .env.local file");
 }
 
 if (!supabaseKey || supabaseKey === "your_supabase_key_here") {
-  console.error("❌ Missing Supabase Key. Please update your .env.local file");
-  console.error(
-    "Current value:",
-    supabaseKey ? "***" + supabaseKey.slice(-4) : "undefined"
-  );
+  console.error("Missing Supabase Key. Please update your .env.local file");
 }
 
-// Create client with validation
 const supabase = createClient(supabaseUrl || "", supabaseKey || "");
 
-// Test connection on startup
 const testConnection = async () => {
   try {
-    const { data, error } = await supabase
-      .from("sensor_readings")
-      .select("count");
+    const { error } = await supabase.from("sensor_readings").select("count");
     if (error) {
       console.warn("Supabase connection test failed:", error.message);
     } else {
-      console.log("✅ Supabase connected successfully");
+      console.log("Supabase connected successfully");
     }
   } catch (err) {
     console.warn("Supabase connection test error:", err.message);
   }
 };
 
-// Run test in development
 if (process.env.NODE_ENV === "development") {
   testConnection();
 }
 
-// Rest of your functions remain the same...
 export const getLatestReading = async () => {
   try {
     const { data, error } = await supabase

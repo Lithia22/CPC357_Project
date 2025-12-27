@@ -12,6 +12,7 @@ function Dashboard() {
   const [mode, setMode] = useState("non_cooking");
   const [valve, setValve] = useState("open");
   const [fan, setFan] = useState(false);
+  const [buzzer, setBuzzer] = useState(false);
   const [alerts, setAlerts] = useState([]);
   const [mqttConnected, setMqttConnected] = useState(false);
 
@@ -49,6 +50,7 @@ function Dashboard() {
       setMode(data.mode);
       setValve(data.valve);
       setFan(data.fan === 1);
+      setBuzzer(data.buzzer === 1);
     });
 
     const readingsChannel = subscribeToReadings((newReading) => {
@@ -143,6 +145,28 @@ function Dashboard() {
             {fan ? "RUNNING" : "STOPPED"}
           </div>
           <div className="card-sub">{fan ? "Ventilating" : "Standby"}</div>
+        </div>
+      </div>
+
+      <div className="status-grid">
+        <div className="status-card">
+          <div className="card-label">Buzzer Alarm</div>
+          <div className={`card-value ${buzzer ? "danger" : ""}`}>
+            {buzzer ? "ACTIVE" : "SILENT"}
+          </div>
+          <div className="card-sub">
+            {buzzer ? "Alert sound on" : "No alarm"}
+          </div>
+        </div>
+
+        <div className="status-card">
+          <div className="card-label">MQTT Connection</div>
+          <div className={`card-value ${mqttConnected ? "safe" : "warning"}`}>
+            {mqttConnected ? "ONLINE" : "OFFLINE"}
+          </div>
+          <div className="card-sub">
+            {mqttConnected ? "Real-time data" : "Reconnecting..."}
+          </div>
         </div>
       </div>
 

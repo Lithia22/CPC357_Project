@@ -1,5 +1,3 @@
-// frontend/src/services/mqttService.js
-// Use the browser build of MQTT
 import mqtt from "mqtt/dist/mqtt";
 
 class MQTTService {
@@ -18,26 +16,24 @@ class MQTTService {
 
     return new Promise((resolve, reject) => {
       try {
-        // Use WebSocket transport for browser
         this.client = mqtt.connect(brokerUrl, {
           clientId: "web_client_" + Math.random().toString(16).substr(2, 8),
           clean: true,
           reconnectPeriod: 1000,
           connectTimeout: 4000,
-          // Force WebSocket protocol
-          protocol: "ws", // or "wss" for secure
+          protocol: "ws",
         });
 
         this.client.on("connect", () => {
-          console.log("✅ Connected to MQTT broker");
+          console.log("Connected to MQTT broker");
           this.connected = true;
 
-          // Subscribe to topics
           const topics = [
             "gas_sensor/data",
             "gas_sensor/alerts",
             "system/mode",
           ];
+
           topics.forEach((topic) => {
             this.client.subscribe(topic, (err) => {
               if (!err) {
@@ -50,7 +46,6 @@ class MQTTService {
         });
 
         this.client.on("message", (topic, message) => {
-          console.log(`MQTT Message [${topic}]:`, message.toString());
           try {
             const data = JSON.parse(message.toString());
             if (this.callbacks[topic]) {
@@ -58,7 +53,6 @@ class MQTTService {
             }
           } catch (err) {
             console.error("MQTT message parse error:", err);
-            // Even if not JSON, still pass the raw message
             if (this.callbacks[topic]) {
               this.callbacks[topic].forEach((callback) =>
                 callback(message.toString())
@@ -68,7 +62,7 @@ class MQTTService {
         });
 
         this.client.on("error", (err) => {
-          console.error("❌ MQTT error:", err);
+          console.error("MQTT error:", err);
           this.connected = false;
           reject(err);
         });
@@ -82,7 +76,6 @@ class MQTTService {
           console.log("MQTT reconnecting...");
         });
 
-        // Set timeout for connection
         setTimeout(() => {
           if (!this.connected) {
             reject(new Error("MQTT connection timeout"));
@@ -95,14 +88,12 @@ class MQTTService {
     });
   }
 
-  // Rest of the methods remain the same...
   subscribe(topic, callback) {
     if (!this.callbacks[topic]) {
       this.callbacks[topic] = [];
     }
     this.callbacks[topic].push(callback);
 
-    // Subscribe to topic if connected
     if (this.client && this.connected) {
       this.client.subscribe(topic, (err) => {
         if (err) {
@@ -129,7 +120,7 @@ class MQTTService {
   }
 
   sendCommand(command) {
-    this.publish("system/commands", { command });
+    this.publish("system/commands", command);
   }
 
   disconnect() {
@@ -145,4 +136,5 @@ class MQTTService {
   }
 }
 
-export default new MQTTService();
+const mqttServiceInstance = new MQTTService();
+export default mqttServiceInstance;
