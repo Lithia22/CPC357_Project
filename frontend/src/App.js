@@ -7,7 +7,6 @@ import {
 } from "react-router-dom";
 import { SidebarProvider, SidebarInset } from "./components/ui/sidebar"; // Changed from @/
 import { AppSidebar } from "./components/AppSidebar";
-import Header from "./components/Header";
 import LandingPage from "./pages/LandingPage";
 import Dashboard from "./pages/Dashboard";
 import LiveCharts from "./pages/LiveCharts";
@@ -35,7 +34,6 @@ function App() {
         <div className="flex min-h-screen w-full bg-gray-50">
           <AppSidebar onLogout={handleLogout} />
           <SidebarInset className="flex-1">
-            <Header />
             <main className="flex-1 overflow-y-auto">
               <Routes>
                 <Route path="/" element={<Navigate to="/dashboard" />} />

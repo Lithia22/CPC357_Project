@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   Sidebar,
   SidebarContent,
@@ -9,17 +9,50 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-} from "./ui/sidebar"; // Changed from @/
+} from "./ui/sidebar";
 import {
   LayoutDashboard,
   BarChart3,
   Bell,
   LogOut,
+  Wifi,
+  WifiOff,
+  Clock,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import mqttService from "../services/mqttService";
 
 export function AppSidebar({ onLogout }) {
   const navigate = useNavigate();
+  const [currentTime, setCurrentTime] = useState(
+    new Date().toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    })
+  );
+  const [isOnline, setIsOnline] = useState(false);
+
+  useEffect(() => {
+    // Update time every second
+    const timer = setInterval(() => {
+      setCurrentTime(
+        new Date().toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+      );
+    }, 1000);
+
+    // Check MQTT connection status every 2 seconds
+    const checkConnection = setInterval(() => {
+      setIsOnline(mqttService.isConnected());
+    }, 2000);
+
+    return () => {
+      clearInterval(timer);
+      clearInterval(checkConnection);
+    };
+  }, []);
 
   const menuItems = [
     { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
@@ -30,13 +63,48 @@ export function AppSidebar({ onLogout }) {
   return (
     <Sidebar className="border-r">
       <SidebarHeader>
-        <div className="flex items-center gap-2 px-4 py-3">
-          <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-            <span className="text-primary-foreground font-bold">GD</span>
+        <div className="px-4 py-4">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="h-10 w-10 rounded-lg bg-primary flex items-center justify-center">
+              <span className="text-primary-foreground font-bold text-lg">
+                GD
+              </span>
+            </div>
+            <div>
+              <h2 className="font-bold text-lg">Main Kitchen</h2>
+              <p className="text-sm text-muted-foreground">Monitoring System</p>
+            </div>
           </div>
-          <div>
-            <h2 className="font-semibold">Gas Detection</h2>
-            <p className="text-xs text-muted-foreground">Monitoring System</p>
+
+          {/* Time and Status Section */}
+          <div className="space-y-3">
+            {/* Time Display */}
+            <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
+              <Clock className="h-4 w-4 text-muted-foreground" />
+              <div>
+                <p className="text-xs text-muted-foreground">Current Time</p>
+                <p className="font-semibold">{currentTime}</p>
+              </div>
+            </div>
+
+            {/* Connection Status */}
+            <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
+              {isOnline ? (
+                <Wifi className="h-4 w-4 text-green-500" />
+              ) : (
+                <WifiOff className="h-4 w-4 text-amber-500" />
+              )}
+              <div>
+                <p className="text-xs text-muted-foreground">System Status</p>
+                <p
+                  className={`font-semibold ${
+                    isOnline ? "text-green-600" : "text-amber-600"
+                  }`}
+                >
+                  {isOnline ? "Online" : "Connecting..."}
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       </SidebarHeader>
