@@ -165,10 +165,20 @@ MQTT_BROKER=mqtt://localhost:1883
 
 ```bash
 npm install
+```
 
-# Copy mqtt-bridge.js from project files
+### **Copy files to VM:**
 
-# Create service:
+**On your computer:** Copy content from `backend/mqtt-bridge.js`
+
+**In GCP SSH terminal:**
+
+```bash
+# 1. Create mqtt-bridge.js on VM
+nano ~/gas-detection-backend/mqtt-bridge.js
+# Paste content and save (Ctrl+O, Enter, Ctrl+X)
+
+# 2. Create systemd service file
 sudo nano /etc/systemd/system/mqtt-bridge.service
 ```
 
@@ -193,6 +203,9 @@ WantedBy=multi-user.target
 ```
 
 ```bash
+# Save the service file (Ctrl+O, Enter, Ctrl+X)
+
+# Enable the service:
 sudo systemctl daemon-reload
 sudo systemctl start mqtt-bridge
 sudo systemctl enable mqtt-bridge
