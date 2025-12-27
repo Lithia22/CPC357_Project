@@ -34,6 +34,7 @@ unsigned long lastGasAlertTime = 0;
 unsigned long lastMqttPublish = 0;
 unsigned long lastButtonCheck = 0;
 bool buttonPressed = false;
+bool cookingMediumActive = false; // NEW: Track if in medium level
 
 void setup()
 {
@@ -96,7 +97,7 @@ void loop()
     // Process gas reading based on mode
     processGasReading();
 
-    // Publish data to MQTT every 5 seconds
+    // Publish data to MQTT every SECOND (changed from 5 seconds)
     if (millis() - lastMqttPublish >= MQTT_UPDATE_INTERVAL)
     {
         publishData();
@@ -270,12 +271,13 @@ void handleButtonPress()
         String modeMsg = isCookingMode ? "cooking_mode" : "non_cooking_mode";
         mqttClient.publish(TOPIC_MODE_STATUS, modeMsg.c_str());
 
-        // Reset if switching to non-cooking mode
+        // Reset when switching to non-cooking mode
         if (!isCookingMode)
         {
             digitalWrite(RELAY_PIN, LOW);
             digitalWrite(BUZZER_PIN, LOW);
             lpgValve.write(VALVE_OPEN);
+            cookingMediumActive = false;
         }
     }
 
@@ -335,21 +337,24 @@ void cookingModeLogic()
     // LEVEL 1: Normal (< 1000) - Everything off
     if (gasValue < GAS_THRESHOLD_NORMAL)
     {
+        if (cookingMediumActive)
+        {
+            Serial.println("Gas returned to normal level - Turning off fan and buzzer");
+            cookingMediumActive = false;
+        }
         digitalWrite(RELAY_PIN, LOW);
         digitalWrite(BUZZER_PIN, LOW);
     }
-    // LEVEL 2: Medium (1000-3000) - Fan on, periodic beeps
+    // LEVEL 2: Medium (1000-3000) - Fan on, CONTINUOUS BUZZER
     else if (gasValue >= GAS_THRESHOLD_NORMAL && gasValue < GAS_THRESHOLD_HIGH)
     {
-        digitalWrite(RELAY_PIN, HIGH);
-
-        // Periodic beep every 3 seconds
-        static unsigned long lastBeepTime = 0;
-        if (millis() - lastBeepTime > 3000)
+        if (!cookingMediumActive)
         {
-            beepBuzzer(2, 100);
-            lastBeepTime = millis();
+            Serial.println("MEDIUM LEVEL - Fan ON, Continuous BUZZER");
+            cookingMediumActive = true;
         }
+        digitalWrite(RELAY_PIN, HIGH);
+        digitalWrite(BUZZER_PIN, HIGH); // CONTINUOUS BUZZER
     }
     // LEVEL 3: High (> 3000) - Emergency override
     else if (gasValue >= GAS_THRESHOLD_HIGH)
@@ -359,6 +364,7 @@ void cookingModeLogic()
 
         // Switch to non-cooking mode for safety
         isCookingMode = false;
+        cookingMediumActive = false;
         activateSafetyMode();
     }
 }
@@ -393,13 +399,16 @@ void publishData()
     // Create JSON-like string manually
     char dataBuffer[256];
 
-    // Gas sensor data
+    // Gas sensor data - UPDATED EVERY SECOND
     snprintf(dataBuffer, sizeof(dataBuffer),
-             "{\"gas\":%d,\"temp\":%.1f,\"threshold\":%d,\"mode\":\"%s\",\"valve\":\"%s\",\"fan\":%d}",
-             gasValue, temperature, adjustedThreshold,
+             "{\"gas\":%d,\"temp\":%.1f,\"threshold\":%d,\"mode\":\"%s\",\"valve\":\"%s\",\"fan\":%d,\"buzzer\":%d}",
+             gasValue,
+             temperature,
+             adjustedThreshold,
              isCookingMode ? "cooking" : "non_cooking",
              (lpgValve.read() == VALVE_CLOSED) ? "closed" : "open",
-             digitalRead(RELAY_PIN));
+             digitalRead(RELAY_PIN),
+             digitalRead(BUZZER_PIN)); // Added buzzer status
 
     mqttClient.publish(TOPIC_GAS_DATA, dataBuffer);
 

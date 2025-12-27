@@ -36,13 +36,6 @@ function Sidebar() {
           Alerts
         </NavLink>
       </nav>
-
-      <div className="sidebar-footer">
-        <div className="system-status">
-          <div className="status-dot"></div>
-          <span>System Online</span>
-        </div>
-      </div>
     </div>
   );
 }

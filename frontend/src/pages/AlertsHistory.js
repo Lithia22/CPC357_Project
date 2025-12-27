@@ -172,16 +172,6 @@ function AlertsHistory() {
           <div className="stat-label">Last Updated</div>
         </div>
       </div>
-
-      <div className="safety-note">
-        <h3>Safety Information</h3>
-        <ul>
-          <li>Danger alerts trigger automatic gas shutoff</li>
-          <li>Warning alerts activate exhaust fan and beeper</li>
-          <li>All emergency actions are automatic</li>
-          <li>System logs all events for safety review</li>
-        </ul>
-      </div>
     </div>
   );
 }
