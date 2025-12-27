@@ -5,15 +5,17 @@ import {
   Route,
   Navigate,
 } from "react-router-dom";
-import Sidebar from "./components/Sidebar";
+import { SidebarProvider, SidebarInset } from "./components/ui/sidebar"; // Changed from @/
+import { AppSidebar } from "./components/AppSidebar";
 import Header from "./components/Header";
+import LandingPage from "./pages/LandingPage";
 import Dashboard from "./pages/Dashboard";
 import LiveCharts from "./pages/LiveCharts";
 import AlertsHistory from "./pages/AlertsHistory";
-import "./App.css";
+import "./styles/App.css";
 
 function App() {
-  const [isLoggedIn, setIsLoggedIn] = useState(true);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   const handleLogout = () => {
     setIsLoggedIn(false);
@@ -24,37 +26,27 @@ function App() {
   };
 
   if (!isLoggedIn) {
-    return (
-      <div className="login-page">
-        <div className="login-box">
-          <h1>Kitchen Safety Monitor</h1>
-          <p>Gas Leak Detection System</p>
-          <button onClick={handleLogin} className="login-btn">
-            Enter System
-          </button>
-          <div className="login-info">
-            <p>Automatic safety system is always active</p>
-            <p>Web interface is for monitoring only</p>
-          </div>
-        </div>
-      </div>
-    );
+    return <LandingPage onEnter={handleLogin} />;
   }
 
   return (
     <Router>
-      <div className="app-container">
-        <Sidebar />
-        <div className="main-content">
-          <Header onLogout={handleLogout} />
-          <Routes>
-            <Route path="/" element={<Navigate to="/dashboard" />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/live-charts" element={<LiveCharts />} />
-            <Route path="/alerts" element={<AlertsHistory />} />
-          </Routes>
+      <SidebarProvider>
+        <div className="flex min-h-screen w-full bg-gray-50">
+          <AppSidebar onLogout={handleLogout} />
+          <SidebarInset className="flex-1">
+            <Header />
+            <main className="flex-1 overflow-y-auto">
+              <Routes>
+                <Route path="/" element={<Navigate to="/dashboard" />} />
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/live-charts" element={<LiveCharts />} />
+                <Route path="/alerts" element={<AlertsHistory />} />
+              </Routes>
+            </main>
+          </SidebarInset>
         </div>
-      </div>
+      </SidebarProvider>
     </Router>
   );
 }
