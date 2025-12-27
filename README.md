@@ -14,99 +14,10 @@ IoT gas leak detection system with ESP32 hardware, GCP cloud backend, React dash
 ```cpp
 #define WIFI_SSID "YOUR_WIFI_NAME"
 #define WIFI_PASSWORD "YOUR_WIFI_PASSWORD"
-#define MQTT_SERVER "YOUR_GCP_VM_IP"  // From Step 2.6
+#define MQTT_SERVER "YOUR_GCP_VM_IP"  // From Step 3.2
 ```
 
-### Step 2: GCP VM Setup (One-time)
-
-### **2.1 Create VM Instance**
-
-| Setting | Configuration |
-|---------|--------------|
-| **Navigate to** | Compute Engine → VM Instances |
-| **Click** | "Create Instance" |
-| **Name** | `gas-detection-mqtt` |
-| **Region** | `us-central1` (or closest) |
-| **Machine type** | `e2-micro` |
-| **Boot disk** | Ubuntu 22.04 LTS (x86/64), 10 GB |
-
-### **2.2 Configure Firewall Rules**
-
-| Setting | MQTT Broker Rule |
-|---------|-----------------|
-| **Navigate to** | VPC Network → Firewall |
-| **Click** | "CREATE FIREWALL RULE" |
-| **Name** | `allow-mqtt-ports` |
-| **Direction** | Ingress |
-| **Action** | Allow |
-| **Targets** | All instances in the network |
-| **Source IP ranges** | `0.0.0.0/0` |
-| **Protocols and ports** | `tcp:1883,9001` |
-
-#### **2.3 SSH into VM**
-
-```bash
-# In GCP Console, click "SSH" button next to your VM
-# This opens browser terminal
-```
-
-#### **2.4 Install Mosquitto MQTT Broker**
-
-```bash
-# In SSH terminal:
-sudo apt update && sudo apt upgrade -y
-sudo apt install mosquitto mosquitto-clients nano -y
-
-# Configure Mosquitto:
-sudo nano /etc/mosquitto/mosquitto.conf
-```
-
-#### **2.5 Configure Mosquitto**
-
-Add these lines to the config file:
-
-```ini
-# MQTT broker configuration
-listener 1883 0.0.0.0
-protocol mqtt
-
-listener 9001 0.0.0.0
-protocol websockets
-
-allow_anonymous true
-max_connections -1
-
-persistence true
-persistence_location /var/lib/mosquitto/
-
-log_dest file /var/log/mosquitto/mosquitto.log
-log_type all
-```
-
-Save (`Ctrl+O`, `Enter`, `Ctrl+X`) and restart:
-
-```bash
-sudo systemctl restart mosquitto
-sudo systemctl enable mosquitto
-```
-
-#### **2.6 Get VM Public IP**
-
-```bash
-# In SSH terminal:
-curl -s ifconfig.me
-# Copy this IP address for ESP32 config
-```
-
-#### **2.7 Install Node.js**
-
-```bash
-curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-sudo apt install nodejs -y
-node --version  # Should show v18.x.x
-```
-
-### Step 3: Supabase Database Setup
+### Step 2: Supabase Database Setup
 
 1. Create account at [supabase.com](https://supabase.com)
 2. Run SQL in Supabase SQL Editor:
@@ -132,17 +43,92 @@ CREATE TABLE alerts (
   timestamp TIMESTAMPTZ DEFAULT NOW()
 );
 ```
+
 3. Go to **Authentication → Users** → Click **"Add User"**:
+
 - **Email**: `chef@kitchen.com`
 - **Password**: `chef123`
 - Click **"Create User"**
 
 **Note**: Disable email confirmation in **Authentication → Providers → Email** → Turn OFF "Confirm email" → Save
 
-### Step 4: Deploy MQTT Bridge Service
+4. Get API keys from **Project Settings → API**:
+
+- **Project URL** → Use as `SUPABASE_URL` in Step 3.3
+- **anon public** key → Use as `SUPABASE_KEY` in Step 3.3
+
+### Step 3: GCP Cloud Deployment
+
+#### **3.1 Create VM Instance & Firewall**
+
+1. Go to **Google Cloud Console → Compute Engine → VM Instances**
+2. Click **"Create Instance"**
+
+| Setting          | Configuration                    |
+| ---------------- | -------------------------------- |
+| **Name**         | `gas-detection-mqtt`             |
+| **Region**       | `us-central1` (or closest)       |
+| **Machine type** | `e2-micro`                       |
+| **Boot disk**    | Ubuntu 22.04 LTS (x86/64), 10 GB |
+
+3. Click **"Create"**
+
+4. Configure Firewall:
+   - Go to **VPC Network → Firewall**
+   - Click **"Create Firewall Rule"**
+
+| Setting                 | Rule                         |
+| ----------------------- | ---------------------------- |
+| **Name**                | `allow-mqtt-ports`           |
+| **Direction**           | Ingress                      |
+| **Action**              | Allow                        |
+| **Targets**             | All instances in the network |
+| **Source IP ranges**    | `0.0.0.0/0`                  |
+| **Protocols and ports** | `TCP:1883,9001`              |
+
+5. Click **"Create"**
+
+#### **3.2 SSH Setup & MQTT Broker**
 
 ```bash
-# On GCP VM:
+# In GCP Console, click "SSH" button next to your VM
+sudo apt update && sudo apt upgrade -y
+sudo apt install mosquitto mosquitto-clients nano -y
+
+# Configure Mosquitto:
+sudo nano /etc/mosquitto/mosquitto.conf
+```
+
+Add these lines:
+
+```ini
+listener 1883 0.0.0.0
+protocol mqtt
+listener 9001 0.0.0.0
+protocol websockets
+allow_anonymous true
+max_connections -1
+```
+
+Save (`Ctrl+O`, `Enter`, `Ctrl+X`) and restart:
+
+```bash
+sudo systemctl restart mosquitto
+sudo systemctl enable mosquitto
+
+# Get VM Public IP:
+curl -s ifconfig.me
+# Copy this IP for ESP32 config (Step 1)
+
+# Install Node.js:
+curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+sudo apt install nodejs -y
+node --version  # Should show v18.x.x
+```
+
+#### **3.3 Deploy MQTT Bridge Service**
+
+```bash
 mkdir -p ~/gas-detection-backend
 cd ~/gas-detection-backend
 
@@ -165,7 +151,7 @@ Add:
 ```
 
 ```bash
-# Create .env file:
+# Create .env file with Supabase credentials from Step 2:
 nano .env
 ```
 
@@ -178,15 +164,15 @@ MQTT_BROKER=mqtt://localhost:1883
 ```
 
 ```bash
-# Install dependencies:
 npm install
 
 # Copy mqtt-bridge.js from project files
-# Then create service:
+
+# Create service:
 sudo nano /etc/systemd/system/mqtt-bridge.service
 ```
 
-Add service configuration:
+Add:
 
 ```ini
 [Unit]
@@ -207,19 +193,16 @@ WantedBy=multi-user.target
 ```
 
 ```bash
-# Enable service:
 sudo systemctl daemon-reload
 sudo systemctl start mqtt-bridge
 sudo systemctl enable mqtt-bridge
 ```
 
-### Step 5: React Dashboard Setup
+### Step 4: React Dashboard Setup
 
 ```bash
 # On local machine:
 cd frontend
-
-# Install dependencies:
 npm install
 
 # Configure environment:
@@ -229,17 +212,16 @@ nano .env.local
 Add:
 
 ```
-REACT_APP_MQTT_BROKER=ws://YOUR_GCP_VM_IP:9001
-REACT_APP_SUPABASE_URL=your_supabase_project_url
-REACT_APP_SUPABASE_ANON_KEY=your_supabase_anon_key
+REACT_APP_MQTT_BROKER=ws://YOUR_GCP_VM_IP:9001    # IP from Step 3.2
+REACT_APP_SUPABASE_URL=your_supabase_project_url   # From Step 2
+REACT_APP_SUPABASE_ANON_KEY=your_supabase_anon_key # From Step 2
 ```
 
 ```bash
-# Start development server:
 npm start
 ```
 
-### Step 6: ESP32 Firmware Upload
+### Step 5: ESP32 Firmware Upload
 
 1. Open `ESP32` in VS Code with PlatformIO extension
 2. Click ✓ button to compile
