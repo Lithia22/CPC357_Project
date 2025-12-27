@@ -2,8 +2,8 @@
 #define CONFIG_H
 
 // WiFi Configuration
-#define WIFI_SSID ""     // - CHANGE THESE WIFI NAME
-#define WIFI_PASSWORD "" // - CHANGE THESE WIFI PW
+#define WIFI_SSID ""     // - CHANGE THIS WIFI NAME
+#define WIFI_PASSWORD "" // - CHANGE THIS WIFI PW
 
 // GCP MQTT Configuration
 #define MQTT_SERVER "" // - CHANGE THIS IP ADDRESS

@@ -6,27 +6,16 @@ import {
   subscribeToAlerts,
 } from "../services/supabaseService";
 import { StatsCard } from "../components/StatsCard";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "../components/ui/card";
-import { Button } from "../components/ui/button";
+import { Card, CardContent } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Alert, AlertDescription } from "../components/ui/alert";
-import {
-  Flame,
-  Thermometer,
-  ChefHat,
-  Plug2,
-  Fan,
-  Bell,
-  Wifi,
-  WifiOff,
-  AlertTriangle,
-  ShieldAlert,
-} from "lucide-react";
+import { ShieldAlert } from "lucide-react";
+import dht11Image from "../assets/images/dht11.png";
+import lpgValveImage from "../assets/images/lpg-valve.png";
+import fanMotorImage from "../assets/images/fan-motor.png";
+import pushButtonImage from "../assets/images/push-button.png";
+import buzzerImage from "../assets/images/buzzer.png";
+import esp32Image from "../assets/images/esp32.png";
 
 function Dashboard() {
   const [gasLevel, setGasLevel] = useState(0);
@@ -57,10 +46,12 @@ function Dashboard() {
         process.env.REACT_APP_MQTT_BROKER || "ws://localhost:9001";
 
       try {
+        setMqttConnected(false);
         await mqttService.connect(brokerUrl);
-        setMqttConnected(true);
+        setMqttConnected(mqttService.isConnected());
       } catch (err) {
         console.error("MQTT connection failed:", err);
+        setMqttConnected(false);
       }
     };
 
@@ -180,47 +171,62 @@ function Dashboard() {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {/* Temperature Card with DHT11 */}
         <StatsCard
-          icon={Thermometer}
+          image={dht11Image}
           label="Temperature"
           value={`${temperature.toFixed(1)}°C`}
           subtext={
             temperature > 30 ? "HOT" : temperature < 20 ? "COOL" : "NORMAL"
           }
+          variant={
+            temperature > 30 ? "warning" : temperature < 20 ? "safe" : "default"
+          }
         />
 
+        {/* System Mode Card - Keep special styling */}
         <Card className="bg-gradient-to-br from-primary to-orange-600 border-0 hover:shadow-lg transition-all">
-          <CardContent className="p-6">
-            <div className="flex items-start justify-between mb-4">
-              <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
-                <ChefHat className="w-6 h-6 text-white" />
+          <CardContent className="p-6 flex flex-col h-full">
+            <div className="mb-4">
+              <p className="text-sm font-medium text-white/90 mb-2">
+                System Mode
+              </p>
+              <p className="text-3xl font-bold text-white">
+                {" "}
+                {mode === "cooking" ? "COOKING" : "STANDBY"}
+              </p>
+              <p className="text-sm text-white/80">
+                {mode === "cooking"
+                  ? "Chef is cooking"
+                  : "No chef in kitchen"}
+              </p>
+            </div>
+
+            {/* Push button image at bottom */}
+            <div className="mt-auto">
+              <div className="flex justify-center mb-4">
+                <img
+                  src={pushButtonImage}
+                  alt="Mode Switch Button"
+                  className="h-32 w-auto object-contain"
+                />
               </div>
             </div>
-            <p className="text-sm font-medium text-white/90 mb-2">
-              System Mode
-            </p>
-            <p className="text-3xl font-bold text-white mb-3">
-              {mode === "cooking" ? "COOKING" : "STANDBY"}
-            </p>
-            <Button
-              onClick={toggleMode}
-              className="w-full bg-white text-primary hover:bg-gray-100"
-            >
-              Switch Mode
-            </Button>
           </CardContent>
         </Card>
 
+        {/* Gas Valve Card with LPG Valve */}
         <StatsCard
-          icon={Plug2}
+          image={lpgValveImage}
           label="Gas Valve"
           value={valve === "open" ? "OPEN" : "CLOSED"}
           subtext={valve === "open" ? "Gas flowing" : "Supply cut"}
           variant={valve === "closed" ? "danger" : "safe"}
         />
 
+        {/* Exhaust Fan Card with Motor */}
         <StatsCard
-          icon={Fan}
+          image={fanMotorImage}
           label="Exhaust Fan"
           value={fan ? "RUNNING" : "STOPPED"}
           subtext={fan ? "Ventilating" : "Standby"}
@@ -230,16 +236,18 @@ function Dashboard() {
 
       {/* Secondary Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Buzzer Alarm Card */}
         <StatsCard
-          icon={Bell}
+          image={buzzerImage}
           label="Buzzer Alarm"
           value={buzzer ? "ACTIVE" : "SILENT"}
           subtext={buzzer ? "Alert sound on" : "No alarm"}
           variant={buzzer ? "danger" : "default"}
         />
 
+        {/* MQTT Connection Card with ESP32 */}
         <StatsCard
-          icon={mqttConnected ? Wifi : WifiOff}
+          image={esp32Image}
           label="MQTT Connection"
           value={mqttConnected ? "ONLINE" : "OFFLINE"}
           subtext={mqttConnected ? "Real-time data" : "Reconnecting..."}

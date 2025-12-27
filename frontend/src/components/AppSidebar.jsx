@@ -21,8 +21,9 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import mqttService from "../services/mqttService";
+import chefImage from "../assets/images/chef.png";
 
-export function AppSidebar({ onLogout }) {
+export function AppSidebar({ onLogout, user }) {
   const navigate = useNavigate();
   const [currentTime, setCurrentTime] = useState(
     new Date().toLocaleTimeString([], {
@@ -65,10 +66,14 @@ export function AppSidebar({ onLogout }) {
       <SidebarHeader>
         <div className="px-4 py-4">
           <div className="flex items-center gap-3 mb-4">
-            <div className="h-10 w-10 rounded-lg bg-primary flex items-center justify-center">
-              <span className="text-primary-foreground font-bold text-lg">
-                GD
-              </span>
+            <div className="flex justify-center">
+              <div className="h-16 w-16 rounded-full border-4 border-orange-400 bg-white p-2 flex items-center justify-center">
+                <img
+                  src={chefImage}
+                  alt="Chef"
+                  className="h-10 w-10 object-contain"
+                />
+              </div>
             </div>
             <div>
               <h2 className="font-bold text-lg">Main Kitchen</h2>

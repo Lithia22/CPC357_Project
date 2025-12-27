@@ -19,37 +19,29 @@ IoT gas leak detection system with ESP32 hardware, GCP cloud backend, React dash
 
 ### Step 2: GCP VM Setup (One-time)
 
-#### **2.1 Create VM Instance**
+### **2.1 Create VM Instance**
 
-```bash
-# In Google Cloud Console:
-# 1. Navigate to Compute Engine → VM Instances
-# 2. Click "Create Instance"
-# 3. Configure:
-#    - Name: gas-detection-mqtt
-#    - Region: us-central1 (or closest)
-#    - Machine: e2-micro (free tier eligible)
-#    - OS: Ubuntu 22.04 LTS
-#    - Boot disk: 10 GB
-# 4. Click "Create"
-```
+| Setting | Configuration |
+|---------|--------------|
+| **Navigate to** | Compute Engine → VM Instances |
+| **Click** | "Create Instance" |
+| **Name** | `gas-detection-mqtt` |
+| **Region** | `us-central1` (or closest) |
+| **Machine type** | `e2-micro` |
+| **Boot disk** | Ubuntu 22.04 LTS (x86/64), 10 GB |
 
-#### **2.2 Configure Firewall Rules (CRITICAL!)**
+### **2.2 Configure Firewall Rules**
 
-**Right after VM creation**, configure firewall:
-
-```bash
-# In Google Cloud Console:
-# 1. Go to VPC Network → Firewall
-# 2. Click "CREATE FIREWALL RULE"
-# 3. Configure:
-#    - Name: allow-mqtt-ports
-#    - Direction: Ingress
-#    - Targets: All instances in the network
-#    - Source IP ranges: 0.0.0.0/0
-#    - Protocols and ports: tcp:1883,9001
-# 4. Click "CREATE"
-```
+| Setting | MQTT Broker Rule |
+|---------|-----------------|
+| **Navigate to** | VPC Network → Firewall |
+| **Click** | "CREATE FIREWALL RULE" |
+| **Name** | `allow-mqtt-ports` |
+| **Direction** | Ingress |
+| **Action** | Allow |
+| **Targets** | All instances in the network |
+| **Source IP ranges** | `0.0.0.0/0` |
+| **Protocols and ports** | `tcp:1883,9001` |
 
 #### **2.3 SSH into VM**
 
@@ -114,7 +106,40 @@ sudo apt install nodejs -y
 node --version  # Should show v18.x.x
 ```
 
-### Step 3: Deploy MQTT Bridge Service
+### Step 3: Supabase Database Setup
+
+1. Create account at [supabase.com](https://supabase.com)
+2. Run SQL in Supabase SQL Editor:
+
+```sql
+CREATE TABLE sensor_readings (
+  id BIGSERIAL PRIMARY KEY,
+  gas_level INTEGER NOT NULL,
+  temperature DECIMAL(5,2) NOT NULL,
+  adjusted_threshold INTEGER NOT NULL,
+  mode VARCHAR(20) NOT NULL,
+  valve_status VARCHAR(10) NOT NULL,
+  fan_status BOOLEAN NOT NULL,
+  timestamp TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE alerts (
+  id BIGSERIAL PRIMARY KEY,
+  message TEXT NOT NULL,
+  gas_level INTEGER NOT NULL,
+  temperature DECIMAL(5,2),
+  alert_type VARCHAR(20) NOT NULL,
+  timestamp TIMESTAMPTZ DEFAULT NOW()
+);
+```
+3. Go to **Authentication → Users** → Click **"Add User"**:
+- **Email**: `chef@kitchen.com`
+- **Password**: `chef123`
+- Click **"Create User"**
+
+**Note**: Disable email confirmation in **Authentication → Providers → Email** → Turn OFF "Confirm email" → Save
+
+### Step 4: Deploy MQTT Bridge Service
 
 ```bash
 # On GCP VM:
@@ -188,33 +213,6 @@ sudo systemctl start mqtt-bridge
 sudo systemctl enable mqtt-bridge
 ```
 
-### Step 4: Supabase Database Setup
-
-1. Create account at [supabase.com](https://supabase.com)
-2. Run SQL in Supabase SQL Editor:
-
-```sql
-CREATE TABLE sensor_readings (
-  id BIGSERIAL PRIMARY KEY,
-  gas_level INTEGER NOT NULL,
-  temperature DECIMAL(5,2) NOT NULL,
-  adjusted_threshold INTEGER NOT NULL,
-  mode VARCHAR(20) NOT NULL,
-  valve_status VARCHAR(10) NOT NULL,
-  fan_status BOOLEAN NOT NULL,
-  timestamp TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE alerts (
-  id BIGSERIAL PRIMARY KEY,
-  message TEXT NOT NULL,
-  gas_level INTEGER NOT NULL,
-  temperature DECIMAL(5,2),
-  alert_type VARCHAR(20) NOT NULL,
-  timestamp TIMESTAMPTZ DEFAULT NOW()
-);
-```
-
 ### Step 5: React Dashboard Setup
 
 ```bash
@@ -248,19 +246,3 @@ npm start
 3. Connect ESP32 via USB
 4. Click ➔ button to upload
 5. Click PlatformIO serial monitor button for output
-
-## System Behavior
-
-### Normal Mode (Default):
-
-- **Gas < 1000**: All systems normal
-- **Gas > 1000 for 2 seconds**: Emergency shutoff
-  - Valve closes (gas off)
-  - Fan turns on
-  - Continuous alarm
-
-### Cooking Mode (Press Button):
-
-- **Gas < 1000**: All off
-- **Gas 1000-3000**: Fan ON + Continuous buzzer
-- **Gas > 3000**: Emergency override to Normal mode
