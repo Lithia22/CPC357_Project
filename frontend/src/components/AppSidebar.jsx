@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import mqttService from "../services/mqttService";
-import chefImage from "../assets/images/chef.png";
+import gasImage from "../assets/images/gas.png";
 
 export function AppSidebar({ onLogout, user }) {
   const navigate = useNavigate();
@@ -67,11 +67,11 @@ export function AppSidebar({ onLogout, user }) {
         <div className="px-4 py-4">
           <div className="flex items-center gap-3 mb-4">
             <div className="flex justify-center">
-              <div className="h-16 w-16 rounded-full border-4 border-orange-400 bg-white p-2 flex items-center justify-center">
+              <div className="flex justify-center">
                 <img
-                  src={chefImage}
-                  alt="Chef"
-                  className="h-10 w-10 object-contain"
+                  src={gasImage}
+                  alt="LPG Gas Tank"
+                  className="h-16 w-16 object-contain"
                 />
               </div>
             </div>

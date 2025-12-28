@@ -13,7 +13,7 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Alert, AlertDescription } from "../components/ui/alert";
 import { AlertCircle, LogIn } from "lucide-react";
-import chefImage from "../assets/images/chef.png";
+import gasImage from "../assets/images/gas.png";
 
 function Login() {
   const [email, setEmail] = useState("");
@@ -63,13 +63,13 @@ function Login() {
       {" "}
       <Card className="w-full max-w-md shadow-xl bg-white">
         <CardHeader className="space-y-1">
-          <div className="flex justify-center mb-3">
+          <div className="flex justify-center">
             <div className="flex justify-center">
-              <div className="h-16 w-16 rounded-full border-4 border-orange-400 bg-white p-2 flex items-center justify-center">
+              <div className="flex justify-center">
                 <img
-                  src={chefImage}
-                  alt="Chef"
-                  className="h-10 w-10 object-contain"
+                  src={gasImage}
+                  alt="LPG Gas Tank"
+                  className="h-24 w-24 object-contain"
                 />
               </div>
             </div>
@@ -124,8 +124,8 @@ function Login() {
             </Button>
           </form>
 
-          <div className="mt-6 text-center">
-            <div className="text-sm text-gray-600 mb-2">
+          <div className="mt-6 text-center space-y-3">
+            <p className="text-sm text-gray-600">
               Don't have an account?{" "}
               <Link
                 to="/signup"
@@ -133,23 +133,28 @@ function Login() {
               >
                 Sign up
               </Link>
-            </div>
+            </p>
 
-            <div className="text-sm">
-              <span className="text-gray-500">
-                Or try our demo account here{" "}
-              </span>
+            <p className="text-sm">
+              <span className="text-gray-600">Try our demo account </span>
               <button
                 type="button"
                 className="text-primary font-medium hover:underline"
-                onClick={() => {
+                onClick={async () => {
                   setEmail("chef@kitchen.com");
                   setPassword("chef123");
+                  // Auto-submit after filling
+                  const result = await login("chef@kitchen.com", "chef123");
+                  if (result.success) {
+                    navigate("/dashboard");
+                  } else {
+                    setError(result.error);
+                  }
                 }}
               >
-                chef
+                here
               </button>
-            </div>
+            </p>
           </div>
         </CardContent>
       </Card>
