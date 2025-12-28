@@ -56,6 +56,17 @@ function Dashboard() {
         setMqttConnected(false);
         await mqttService.connect(brokerUrl);
         setMqttConnected(mqttService.isConnected());
+        if (mqttService.isConnected()) {
+          await mqttService.subscribe("gas_sensor/data", (data) => {
+            setGasLevel(data.gas);
+            setTemperature(data.temp);
+            setAdjustedThreshold(data.threshold);
+            setMode(data.mode);
+            setValve(data.valve);
+            setFan(data.fan === 1);
+            setBuzzer(data.buzzer === 1);
+          });
+        }
       } catch (err) {
         console.error("MQTT connection failed:", err);
         setMqttConnected(false);
@@ -63,16 +74,6 @@ function Dashboard() {
     };
 
     initializeData();
-
-    mqttService.subscribe("gas_sensor/data", (data) => {
-      setGasLevel(data.gas);
-      setTemperature(data.temp);
-      setAdjustedThreshold(data.threshold);
-      setMode(data.mode);
-      setValve(data.valve);
-      setFan(data.fan === 1);
-      setBuzzer(data.buzzer === 1);
-    });
 
     const readingsChannel = subscribeToReadings((newReading) => {
       setGasLevel(newReading.gas_level);

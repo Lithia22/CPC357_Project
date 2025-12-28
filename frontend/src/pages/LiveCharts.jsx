@@ -56,28 +56,30 @@ function LiveCharts() {
         process.env.REACT_APP_MQTT_BROKER || "ws://localhost:9001";
       try {
         await mqttService.connect(brokerUrl);
+        mqttService.subscribe("gas_sensor/data", (data) => {
+          const time = new Date().toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+          setCombinedData((prev) => {
+            const updated = [
+              ...prev.slice(1),
+              { time, gas: data.gas, temp: Math.round(data.temp) },
+            ];
+            return updated;
+          });
+          setCurrentGas(data.gas);
+          setCurrentTemp(Math.round(data.temp));
+          setCurrentMode(data.mode);
+          setAdjustedThreshold(data.threshold);
+        });
       } catch (err) {
         console.error("MQTT connection failed:", err);
       }
     };
+
     initializeData();
-    mqttService.subscribe("gas_sensor/data", (data) => {
-      const time = new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-      setCombinedData((prev) => {
-        const updated = [
-          ...prev.slice(1),
-          { time, gas: data.gas, temp: Math.round(data.temp) },
-        ];
-        return updated;
-      });
-      setCurrentGas(data.gas);
-      setCurrentTemp(Math.round(data.temp));
-      setCurrentMode(data.mode);
-      setAdjustedThreshold(data.threshold);
-    });
+
     return () => {
       mqttService.disconnect();
     };
