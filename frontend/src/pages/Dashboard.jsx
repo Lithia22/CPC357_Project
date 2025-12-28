@@ -135,7 +135,7 @@ function Dashboard() {
         } shadow-xl`}
       >
         <CardContent className="p-8">
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between mb-4">
             <div>
               <p className="text-sm font-medium text-gray-600 mb-1">
                 GAS LEVEL MONITOR
@@ -160,10 +160,6 @@ function Dashboard() {
                 {gasLevel}
               </span>
               <span className="text-2xl font-semibold text-gray-500">PPM</span>
-            </div>
-            <div className="mt-4 text-sm text-gray-600">
-              Adjusted Threshold: {adjustedThreshold} PPM (
-              {temperature.toFixed(1)}°C)
             </div>
             <div className="mt-4 h-3 bg-gray-200 rounded-full overflow-hidden">
               <div
@@ -196,13 +192,15 @@ function Dashboard() {
 
         <Card className="bg-gradient-to-br from-primary to-orange-600 border-0 hover:shadow-lg transition-all">
           <CardContent className="p-6 flex flex-col h-full">
-            <div className="mb-4">
-              <p className="text-sm font-medium text-white/90 mb-2">
+            <div>
+              <p className="text-sm font-medium text-white/90">
                 System Mode
               </p>
-              <p className="text-3xl font-bold text-white">
-                {mode === "cooking" ? "COOKING" : "STANDBY"}
-              </p>
+              <div className="min-h-[4rem] flex items-center">
+                <p className="text-3xl font-bold text-white">
+                  {mode === "cooking" ? "COOKING" : "NON-COOKING"}
+                </p>
+              </div>
               <p className="text-sm text-white/80">
                 {mode === "cooking" ? "Chef is cooking" : "No chef in kitchen"}
               </p>
@@ -213,7 +211,7 @@ function Dashboard() {
                 <img
                   src={pushButtonImage}
                   alt="Mode Switch Button"
-                  className="h-32 w-auto object-contain"
+                  className="h-28 w-auto object-contain"
                 />
               </div>
             </div>
@@ -233,7 +231,7 @@ function Dashboard() {
           image={fanMotorImage}
           label="Exhaust Fan"
           value={fan ? "RUNNING" : "STOPPED"}
-          subtext={fan ? "Ventilating" : "Standby"}
+          subtext={fan ? "Ventilating" : "Not Ventilating"}
           variant={fan ? "warning" : "default"}
         />
       </div>

@@ -11,7 +11,12 @@ import {
 } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
-import { Bell, AlertTriangle, Info, ShieldAlert, Calendar } from "lucide-react";
+import {
+  Bell,
+  AlertTriangle,
+  ShieldCheck,
+  ShieldAlert,
+} from "lucide-react";
 
 function AlertsHistory() {
   const [alerts, setAlerts] = useState([]);
@@ -52,8 +57,10 @@ function AlertsHistory() {
         return <ShieldAlert className="w-5 h-5" />;
       case "warning":
         return <AlertTriangle className="w-5 h-5" />;
+      case "safe":
+        return <ShieldCheck className="w-5 h-5" />;
       default:
-        return <Info className="w-5 h-5" />;
+        return <ShieldCheck className="w-5 h-5" />;
     }
   };
 
@@ -82,9 +89,9 @@ function AlertsHistory() {
       count: alerts.filter((a) => a.alert_type === "warning").length,
     },
     {
-      label: "Info",
-      value: "info",
-      count: alerts.filter((a) => a.alert_type === "info").length,
+      label: "Safe",
+      value: "safe",
+      count: alerts.filter((a) => a.alert_type === "safe").length,
     },
   ];
 
@@ -135,14 +142,14 @@ function AlertsHistory() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-green-200 bg-green-50">
           <CardContent className="p-6">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-sm font-medium text-gray-600">Last Updated</p>
-              <Calendar className="w-5 h-5 text-gray-400" />
+              <p className="text-sm font-medium text-green-700">Safe Status</p>
+              <ShieldCheck className="w-5 h-5 text-green-600" />
             </div>
-            <p className="text-lg font-bold text-gray-900">
-              {alerts.length > 0 ? formatDate(alerts[0].timestamp) : "N/A"}
+            <p className="text-3xl font-bold text-green-700">
+              {alerts.filter((a) => a.alert_type === "safe").length}
             </p>
           </CardContent>
         </Card>
@@ -215,7 +222,7 @@ function AlertsHistory() {
                           ? "bg-red-50/30"
                           : alert.alert_type === "warning"
                           ? "bg-amber-50/30"
-                          : "bg-blue-50/30"
+                          : "bg-green-50/30"
                       }`}
                     >
                       <td className="py-4 px-4">
@@ -233,7 +240,7 @@ function AlertsHistory() {
                               ? "bg-red-500"
                               : alert.alert_type === "warning"
                               ? "bg-amber-500"
-                              : "bg-blue-500"
+                              : "bg-green-500"
                           }`}
                         >
                           {getTypeIcon(alert.alert_type)}
@@ -247,13 +254,16 @@ function AlertsHistory() {
                           <span className="font-semibold text-gray-900">
                             {alert.gas_level} PPM
                           </span>
-                          {alert.gas_level > 3000 && (
+                          {alert.gas_level >= 3000 && (
                             <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
                           )}
-                          {alert.gas_level > 1000 &&
-                            alert.gas_level <= 3000 && (
+                          {alert.gas_level >= 1000 &&
+                            alert.gas_level < 3000 && (
                               <div className="w-2 h-2 bg-amber-500 rounded-full"></div>
                             )}
+                          {alert.gas_level < 1000 && (
+                            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                          )}
                         </div>
                       </td>
                       <td className="py-4 px-4 text-gray-700">

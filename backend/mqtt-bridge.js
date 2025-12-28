@@ -46,7 +46,9 @@ mqttClient.on("message", async (topic, message) => {
       }
 
       if (data.gas >= 3000) {
-        console.log(`DANGER DETECTED: ${data.gas} PPM - Sending emergency alerts`);
+        console.log(
+          `DANGER DETECTED: ${data.gas} PPM - Sending emergency alerts`
+        );
 
         if (process.env.EMERGENCY_CONTACT_1) {
           await textBee.sendEmergencySMS(
@@ -67,7 +69,7 @@ mqttClient.on("message", async (topic, message) => {
     }
 
     if (topic === "gas_sensor/alerts") {
-      let alertType = "info";
+      let alertType = "safe";
       if (data.gas_level >= 3000) alertType = "danger";
       else if (data.gas_level >= 1000) alertType = "warning";
 
