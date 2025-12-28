@@ -40,24 +40,6 @@ function Login() {
     setLoading(false);
   };
 
-  // Demo credentials for quick testing
-  const fillDemoCredentials = (role) => {
-    switch (role) {
-      case "admin":
-        setEmail("admin@kitchen.com");
-        setPassword("admin123");
-        break;
-      case "chef":
-        setEmail("chef@restaurant.com");
-        setPassword("chef123");
-        break;
-      case "manager":
-        setEmail("manager@restaurant.com");
-        setPassword("manager123");
-        break;
-    }
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 to-white flex items-center justify-center p-4">
       {" "}

@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-IoT gas leak detection system with ESP32 hardware, GCP cloud backend, React dashboard, Supabase database and automatic safety shutoff.
+IoT gas leak detection system with ESP32 hardware, GCP cloud backend, React dashboard with ShadcnUI components, Supabase database, automatic safety shutoff, and emergency SMS alerts via TextBee.
 
 ## Setup Instructions
 
@@ -124,9 +124,12 @@ curl -s ifconfig.me
 curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
 sudo apt install nodejs -y
 node --version  # Should show v18.x.x
+
+# Install additional packages for TextBee integration:
+sudo apt install git -y
 ```
 
-#### **3.3 Deploy MQTT Bridge Service**
+#### **3.3 Deploy MQTT Bridge & Emergency Alert Service**
 
 ```bash
 mkdir -p ~/gas-detection-backend
@@ -144,14 +147,15 @@ Add:
   "version": "1.0.0",
   "dependencies": {
     "mqtt": "^4.3.7",
-    "@supabase/supabase-js": "^2.39.0"
+    "@supabase/supabase-js": "^2.39.0",
+    "axios": "^1.6.0"
   },
   "main": "mqtt-bridge.js"
 }
 ```
 
 ```bash
-# Create .env file with Supabase credentials from Step 2:
+# Create .env file:
 nano .env
 ```
 
@@ -161,15 +165,41 @@ Add:
 SUPABASE_URL=your_supabase_project_url
 SUPABASE_KEY=your_supabase_anon_key
 MQTT_BROKER=mqtt://localhost:1883
+TEXTBEE_API_KEY=your_textbee_api_key
+TEXTBEE_DEVICE_ID=your_textbee_device_id
+EMERGENCY_CONTACT_1=+60143631375
+EMERGENCY_CONTACT_2=+60123456789
 ```
 
 ```bash
 npm install
 ```
 
+### **3.4 TextBee Emergency Alert Setup (Optional but Recommended)**
+
+1. **Register at TextBee:**
+
+   - Go to https://textbee.dev and create an account
+   - Get your API key and device ID from dashboard
+
+2. **Setup TextBee Android Gateway:**
+
+   - Install TextBee app on an Android phone
+   - Grant SMS permissions
+   - Scan QR code from dashboard to link device
+   - Keep phone connected to WiFi for SMS gateway
+
+3. **Create TextBee service file on VM:**
+
+```bash
+nano ~/gas-detection-backend/textbee-service.js
+```
+
+Add the TextBee service code (see `backend/textbee-service.js` in project files).
+
 ### **Copy files to VM:**
 
-**On your computer:** Copy content from `backend/mqtt-bridge.js`
+**On your computer:** Copy content from `backend/mqtt-bridge.js` and `backend/textbee-service.js`
 
 **In GCP SSH terminal:**
 
@@ -178,7 +208,11 @@ npm install
 nano ~/gas-detection-backend/mqtt-bridge.js
 # Paste content and save (Ctrl+O, Enter, Ctrl+X)
 
-# 2. Create systemd service file
+# 2. Create textbee-service.js on VM
+nano ~/gas-detection-backend/textbee-service.js
+# Paste content and save (Ctrl+O, Enter, Ctrl+X)
+
+# 3. Create systemd service file
 sudo nano /etc/systemd/system/mqtt-bridge.service
 ```
 
@@ -186,7 +220,7 @@ Add:
 
 ```ini
 [Unit]
-Description=MQTT Bridge Service
+Description=MQTT Bridge Service with Emergency Alerts
 After=network.target mosquitto.service
 
 [Service]
@@ -209,6 +243,12 @@ WantedBy=multi-user.target
 sudo systemctl daemon-reload
 sudo systemctl start mqtt-bridge
 sudo systemctl enable mqtt-bridge
+
+# Check status:
+sudo systemctl status mqtt-bridge
+
+# View logs:
+sudo journalctl -u mqtt-bridge -f
 ```
 
 ### Step 4: React Dashboard Setup
@@ -225,9 +265,9 @@ nano .env.local
 Add:
 
 ```
-REACT_APP_MQTT_BROKER=ws://YOUR_GCP_VM_IP:9001    # IP from Step 3.2
-REACT_APP_SUPABASE_URL=your_supabase_project_url   # From Step 2
-REACT_APP_SUPABASE_ANON_KEY=your_supabase_anon_key # From Step 2
+REACT_APP_MQTT_BROKER=ws://YOUR_GCP_VM_IP:9001
+REACT_APP_SUPABASE_URL=your_supabase_project_url
+REACT_APP_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
 ```bash

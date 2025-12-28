@@ -2,8 +2,8 @@ import React from "react";
 import { Card, CardContent } from "../components/ui/card";
 
 export function StatsCard({
-  image, // New prop for image
-  icon: Icon, // Keep icon for backward compatibility
+  image,
+  icon: Icon,
   label,
   value,
   subtext,
@@ -28,22 +28,17 @@ export function StatsCard({
       className={`${variantStyles[variant]} border-2 hover:shadow-lg transition-all`}
     >
       <CardContent className="p-6">
-        {/* Text content at top */}
         <div>
           {" "}
-          {/* Removed mb-4 entirely */}
           <p className="text-sm font-medium text-gray-600">{label}</p>{" "}
-          {/* Removed mb-2 */}
           <p className={`text-3xl font-bold ${valueStyles[variant]}`}>
             {value}
           </p>
           {subtext && <p className="text-sm text-gray-500 mt-1">{subtext}</p>}
         </div>
 
-        {/* Image at bottom - directly below text */}
         <div className="flex justify-center">
           {" "}
-          {/* Removed mt-4 entirely */}
           {image ? (
             <div className="relative">
               <img
@@ -51,7 +46,6 @@ export function StatsCard({
                 alt={label}
                 className="h-40 w-auto object-contain max-w-full"
               />
-              {/* Optional: Status indicator overlay */}
               {variant === "danger" && (
                 <div className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center">
                   <span className="text-white text-xs font-bold">!</span>

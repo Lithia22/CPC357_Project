@@ -13,10 +13,10 @@ void processGasReading();
 void handleButtonPress();
 void activateSafetyMode();
 void deactivateSafetyMode();
-void cookingModeLogic();
 void publishData();
 void publishAlert(const char *message, int gasLevel);
 void beepBuzzer(int times, int duration);
+int calculateAdjustedThreshold(int baseThreshold);
 
 WiFiClient wifiClient;
 PubSubClient mqttClient(wifiClient);
@@ -25,15 +25,17 @@ Servo lpgValve;
 
 int gasValue = 0;
 float temperature = 25.0;
-int adjustedThreshold = GAS_THRESHOLD_NORMAL;
+int adjustedSafeThreshold = BASE_THRESHOLD;
+int adjustedWarningThreshold = COOKING_WARNING_THRESHOLD;
+int adjustedDangerThreshold = COOKING_DANGER_THRESHOLD;
+
 bool isCookingMode = false;
 bool gasAlertActive = false;
-unsigned long lastGasAlertTime = 0;
+bool valveClosed = false;
+unsigned long gasAlertStartTime = 0;
 unsigned long lastMqttPublish = 0;
 unsigned long lastButtonCheck = 0;
 bool buttonPressed = false;
-bool cookingMediumActive = false;
-bool valveClosed = false;
 
 void setup()
 {
@@ -66,10 +68,7 @@ void setup()
 
     Serial.println("System Ready!");
     Serial.println("Current Mode: NON-COOKING");
-    Serial.println("Press button to toggle between COOKING and NON-COOKING mode");
-    Serial.println("");
-    Serial.println("COOKING MODE: Valve stays OPEN unless EXTREME danger (>3000 PPM)");
-    Serial.println("NON-COOKING MODE: Valve closes on any gas leak (>1000 PPM)");
+    Serial.println("Press button to toggle modes");
     Serial.print("Connected to MQTT Server: ");
     Serial.println(MQTT_SERVER);
     Serial.println("======================================");
@@ -148,7 +147,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length)
     {
         if (message == "emergency_stop")
         {
-            Serial.println("Emergency stop command received from web!");
+            Serial.println("Emergency stop command received from web");
             activateSafetyMode();
         }
         else if (message == "toggle_mode")
@@ -171,7 +170,6 @@ void mqttCallback(char *topic, byte *payload, unsigned int length)
                 {
                     lpgValve.write(VALVE_OPEN);
                 }
-                cookingMediumActive = false;
                 gasAlertActive = false;
             }
         }
@@ -203,35 +201,39 @@ void reconnectMQTT()
     }
 }
 
+int calculateAdjustedThreshold(int baseThreshold)
+{
+    if (temperature > HOT_TEMP)
+    {
+        return baseThreshold * HOT_FACTOR;
+    }
+    else if (temperature < COLD_TEMP)
+    {
+        return baseThreshold * COLD_FACTOR;
+    }
+    return baseThreshold;
+}
+
 void readSensors()
 {
     gasValue = analogRead(MQ2_PIN);
 
     float temp = dht.readTemperature();
-
     if (!isnan(temp) && temp > 0 && temp < 80)
     {
         temperature = temp;
     }
 
-    if (temperature > HOT_TEMP)
-    {
-        adjustedThreshold = GAS_THRESHOLD_NORMAL * HOT_FACTOR;
-    }
-    else if (temperature < COLD_TEMP)
-    {
-        adjustedThreshold = GAS_THRESHOLD_NORMAL * COLD_FACTOR;
-    }
-    else
-    {
-        adjustedThreshold = GAS_THRESHOLD_NORMAL;
-    }
+    adjustedSafeThreshold = calculateAdjustedThreshold(BASE_THRESHOLD);
+    adjustedWarningThreshold = calculateAdjustedThreshold(COOKING_WARNING_THRESHOLD);
+    adjustedDangerThreshold = calculateAdjustedThreshold(COOKING_DANGER_THRESHOLD);
 
     Serial.print("Gas: ");
     Serial.print(gasValue);
     Serial.print(" | Temp: ");
     Serial.print(temperature);
-    Serial.print(adjustedThreshold);
+    Serial.print("C | Threshold: ");
+    Serial.print(adjustedSafeThreshold);
     Serial.print(" | Mode: ");
     Serial.print(isCookingMode ? "COOKING" : "NON-COOKING");
     Serial.print(" | Valve: ");
@@ -248,22 +250,11 @@ void handleButtonPress()
         lastButtonCheck = millis();
 
         isCookingMode = !isCookingMode;
-
         beepBuzzer(1, 100);
 
         Serial.println("==================================");
         Serial.print("BUTTON PRESSED - Mode changed to: ");
         Serial.println(isCookingMode ? "COOKING MODE" : "NON-COOKING MODE");
-
-        if (isCookingMode)
-        {
-            Serial.println("Valve will STAY OPEN for normal cooking");
-            Serial.println("Only closes if gas exceeds 3000 PPM");
-        }
-        else
-        {
-            Serial.println("Valve closes on ANY gas leak > threshold");
-        }
         Serial.println("==================================");
 
         String modeMsg = isCookingMode ? "cooking_mode" : "non_cooking_mode";
@@ -277,7 +268,6 @@ void handleButtonPress()
             {
                 lpgValve.write(VALVE_OPEN);
             }
-            cookingMediumActive = false;
             gasAlertActive = false;
         }
     }
@@ -292,20 +282,26 @@ void processGasReading()
 {
     if (!isCookingMode)
     {
-        if (gasValue > adjustedThreshold)
+        if (gasValue >= adjustedSafeThreshold)
         {
             if (!gasAlertActive)
             {
                 gasAlertActive = true;
-                lastGasAlertTime = millis();
-                Serial.println("GAS LEAK DETECTED in NON-COOKING MODE!");
-                publishAlert("Gas leak detected in NON-COOKING mode!", gasValue);
+                gasAlertStartTime = millis();
+                Serial.println("GAS LEAK DETECTED in NON-COOKING MODE");
+                publishAlert("Gas leak detected in NON-COOKING mode", gasValue);
                 beepBuzzer(3, 200);
+
+                digitalWrite(RELAY_PIN, HIGH);
+                digitalWrite(BUZZER_PIN, HIGH);
             }
 
-            if (gasAlertActive && (millis() - lastGasAlertTime > ALARM_DELAY_MS))
+            if (millis() - gasAlertStartTime >= VALVE_CLOSE_DELAY)
             {
-                activateSafetyMode();
+                if (!valveClosed)
+                {
+                    activateSafetyMode();
+                }
             }
         }
         else
@@ -321,66 +317,36 @@ void processGasReading()
     }
     else
     {
-        cookingModeLogic();
-    }
-}
-
-void cookingModeLogic()
-{
-    if (gasValue < GAS_THRESHOLD_NORMAL)
-    {
-        if (cookingMediumActive || valveClosed)
+        if (gasValue < adjustedWarningThreshold)
         {
-            Serial.println("======================================");
-            Serial.println("Gas returned to NORMAL level");
-            Serial.println("Turning off fan and buzzer");
-
-            if (valveClosed)
+            if (gasAlertActive || valveClosed)
             {
-                Serial.println("REOPENING valve for cooking");
+                Serial.println("Gas returned to SAFE level");
+                gasAlertActive = false;
+                deactivateSafetyMode();
             }
-
-            Serial.println("STAYING IN COOKING MODE");
-            Serial.println("======================================");
-
-            cookingMediumActive = false;
-            deactivateSafetyMode();
+            digitalWrite(RELAY_PIN, LOW);
+            digitalWrite(BUZZER_PIN, LOW);
         }
-
-        digitalWrite(RELAY_PIN, LOW);
-        digitalWrite(BUZZER_PIN, LOW);
-    }
-    else if (gasValue >= GAS_THRESHOLD_NORMAL && gasValue < GAS_THRESHOLD_HIGH)
-    {
-        if (!cookingMediumActive)
+        else if (gasValue >= adjustedWarningThreshold && gasValue < adjustedDangerThreshold)
         {
-            Serial.println("======================================");
-            Serial.println("MEDIUM GAS LEVEL (Normal for cooking)");
-            Serial.println("Fan: ON | Buzzer: CONTINUOUS");
-            Serial.println("Valve: STAYS OPEN - Cooking can continue");
-            Serial.println("Mode: COOKING");
-            Serial.println("======================================");
-            cookingMediumActive = true;
-            publishAlert("Medium gas level during cooking - Normal operation", gasValue);
+            if (!gasAlertActive)
+            {
+                Serial.println("WARNING: Medium gas level during cooking");
+                publishAlert("Medium gas level during cooking - Normal operation", gasValue);
+                gasAlertActive = true;
+            }
+            digitalWrite(RELAY_PIN, HIGH);
+            digitalWrite(BUZZER_PIN, HIGH);
         }
-
-        digitalWrite(RELAY_PIN, HIGH);
-        digitalWrite(BUZZER_PIN, HIGH);
-    }
-    else if (gasValue >= GAS_THRESHOLD_HIGH)
-    {
-        if (!valveClosed)
+        else if (gasValue >= adjustedDangerThreshold)
         {
-            Serial.println("======================================");
-            Serial.println("!!! EXTREME DANGER !!!");
-            Serial.println("Gas level TOO HIGH for safe cooking!");
-            Serial.println("CLOSING VALVE for safety");
-            Serial.println("Fan: ON | Buzzer: ON");
-            Serial.println("Mode: STAYS IN COOKING");
-            Serial.println("Valve will reopen when gas drops below 3000");
-            Serial.println("======================================");
-            publishAlert("EXTREME DANGER: Gas too high, valve closed!", gasValue);
-            activateSafetyMode();
+            if (!valveClosed)
+            {
+                Serial.println("EXTREME DANGER: Gas too high for safe cooking");
+                publishAlert("EXTREME DANGER: Gas too high, valve closed", gasValue);
+                activateSafetyMode();
+            }
         }
     }
 }
@@ -391,7 +357,6 @@ void activateSafetyMode()
         return;
 
     valveClosed = true;
-
     digitalWrite(BUZZER_PIN, HIGH);
 
     lpgValve.write(VALVE_CLOSED);
@@ -411,7 +376,6 @@ void deactivateSafetyMode()
         return;
 
     valveClosed = false;
-
     digitalWrite(BUZZER_PIN, LOW);
     digitalWrite(RELAY_PIN, LOW);
 
@@ -432,7 +396,7 @@ void publishData()
              "{\"gas\":%d,\"temp\":%.1f,\"threshold\":%d,\"mode\":\"%s\",\"valve\":\"%s\",\"fan\":%d,\"buzzer\":%d}",
              gasValue,
              temperature,
-             adjustedThreshold,
+             adjustedSafeThreshold,
              isCookingMode ? "cooking" : "non_cooking",
              valveClosed ? "closed" : "open",
              digitalRead(RELAY_PIN),

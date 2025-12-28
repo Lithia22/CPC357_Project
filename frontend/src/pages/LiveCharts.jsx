@@ -17,23 +17,23 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
 } from "recharts";
-import { Activity, Thermometer, TrendingUp } from "lucide-react";
-
 function LiveCharts() {
-  const [gasData, setGasData] = useState([]);
-  const [tempData, setTempData] = useState([]);
+  const [combinedData, setCombinedData] = useState([]);
   const [currentGas, setCurrentGas] = useState(0);
   const [currentTemp, setCurrentTemp] = useState(0);
-  const [combinedData, setCombinedData] = useState([]);
-
+  const [currentMode, setCurrentMode] = useState("non_cooking");
+  const [adjustedThreshold, setAdjustedThreshold] = useState(1000);
+  const calculateAdjustedThreshold = (temp, baseThreshold = 1000) => {
+    if (temp > 35) return Math.round(baseThreshold * 1.5);
+    if (temp < 15) return Math.round(baseThreshold * 0.7);
+    return baseThreshold;
+  };
   useEffect(() => {
     const initializeData = async () => {
       try {
         const readings = await getRecentReadings(20);
-
         const formattedData = readings.reverse().map((r) => ({
           time: new Date(r.timestamp).toLocaleTimeString([], {
             hour: "2-digit",
@@ -42,36 +42,30 @@ function LiveCharts() {
           gas: r.gas_level,
           temp: Math.round(r.temperature),
         }));
-
         setCombinedData(formattedData);
-
         if (readings.length > 0) {
           const latest = readings[readings.length - 1];
           setCurrentGas(latest.gas_level);
           setCurrentTemp(Math.round(latest.temperature));
+          setAdjustedThreshold(latest.adjusted_threshold);
         }
       } catch (err) {
         console.error("Error loading chart data:", err);
       }
-
       const brokerUrl =
         process.env.REACT_APP_MQTT_BROKER || "ws://localhost:9001";
-
       try {
         await mqttService.connect(brokerUrl);
       } catch (err) {
         console.error("MQTT connection failed:", err);
       }
     };
-
     initializeData();
-
     mqttService.subscribe("gas_sensor/data", (data) => {
       const time = new Date().toLocaleTimeString([], {
         hour: "2-digit",
         minute: "2-digit",
       });
-
       setCombinedData((prev) => {
         const updated = [
           ...prev.slice(1),
@@ -79,24 +73,31 @@ function LiveCharts() {
         ];
         return updated;
       });
-
       setCurrentGas(data.gas);
       setCurrentTemp(Math.round(data.temp));
+      setCurrentMode(data.mode);
+      setAdjustedThreshold(data.threshold);
     });
-
     return () => {
       mqttService.disconnect();
     };
   }, []);
-
   const getGasStatus = (value) => {
-    if (value > 3000) return { label: "DANGER", variant: "destructive" };
-    if (value > 1000) return { label: "WARNING", variant: "secondary" };
-    return { label: "SAFE", variant: "default" };
+    if (currentMode === "cooking") {
+      const warningThreshold = calculateAdjustedThreshold(currentTemp, 1000);
+      const dangerThreshold = calculateAdjustedThreshold(currentTemp, 3000);
+      if (value >= dangerThreshold)
+        return { label: "DANGER", variant: "destructive" };
+      if (value >= warningThreshold)
+        return { label: "WARNING", variant: "secondary" };
+      return { label: "SAFE", variant: "default" };
+    } else {
+      if (value >= adjustedThreshold)
+        return { label: "DANGER", variant: "destructive" };
+      return { label: "SAFE", variant: "default" };
+    }
   };
-
   const gasStatus = getGasStatus(currentGas);
-
   return (
     <div className="p-6 space-y-6">
       <div>
@@ -104,15 +105,11 @@ function LiveCharts() {
           Live Monitoring
         </h1>
         <p className="text-gray-600">Real-time sensor data visualization</p>
-      </div>
-
-      {/* Current Readings */}
+      </div>{" "}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card className="border-2">
           <CardContent className="p-6">
-            {/* Changed from items-start to items-center and added relative positioning */}
             <div className="flex justify-between items-center mb-4 relative">
-              {/* Empty div to push badge to the right while keeping title on left */}
               <div className="text-sm font-medium text-gray-600">
                 Current Gas Level
               </div>
@@ -134,10 +131,11 @@ function LiveCharts() {
               </span>
               <span className="text-xl font-semibold text-gray-500">PPM</span>
             </div>
-            <p className="text-sm text-gray-500 mt-2">Live reading</p>
+            <p className="text-sm text-gray-500 mt-2">
+              Threshold: {adjustedThreshold} PPM
+            </p>
           </CardContent>
-        </Card>
-
+        </Card>{" "}
         <Card className="border-2">
           <CardContent className="p-6">
             <div className="flex justify-between items-center mb-4">
@@ -155,8 +153,7 @@ function LiveCharts() {
             <p className="text-sm text-gray-500 mt-2">Live reading</p>
           </CardContent>
         </Card>
-      </div>
-
+      </div>{" "}
       {/* Gas Level Chart */}
       <Card>
         <CardHeader>
@@ -189,8 +186,8 @@ function LiveCharts() {
                   value: "Gas Level (PPM)",
                   angle: -90,
                   position: "middle",
-                  dx: -25, // Negative moves LEFT, positive moves RIGHT
-                  dy: 10, // Positive moves DOWN, negative moves UP
+                  dx: -25,
+                  dy: 10,
                   fill: "#666",
                 }}
               />
@@ -211,8 +208,7 @@ function LiveCharts() {
             </BarChart>
           </ResponsiveContainer>
         </CardContent>
-      </Card>
-
+      </Card>{" "}
       {/* Temperature Chart */}
       <Card>
         <CardHeader>
@@ -233,10 +229,10 @@ function LiveCharts() {
                 label={{
                   value: "Time",
                   position: "outside",
-                  offset: 5, // Small positive offset
+                  offset: 5,
                   fill: "#666",
                   fontSize: 14,
-                  dy: 30, // Move it further down
+                  dy: 30,
                 }}
               />
               <YAxis
@@ -245,8 +241,8 @@ function LiveCharts() {
                   value: "Temperature (°C)",
                   angle: -90,
                   position: "middle",
-                  dx: -25, // Negative moves LEFT, positive moves RIGHT
-                  dy: 10, // Positive moves DOWN, negative moves UP
+                  dx: -25,
+                  dy: 10,
                   fill: "#666",
                 }}
               />
@@ -269,9 +265,7 @@ function LiveCharts() {
             </LineChart>
           </ResponsiveContainer>
         </CardContent>
-      </Card>
-
-      {/* Data Table */}
+      </Card>{" "}
       <Card>
         <CardHeader>
           <CardTitle>Recent Readings</CardTitle>
