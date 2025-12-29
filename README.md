@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-IoT gas leak detection system with ESP32 hardware, GCP cloud backend, React dashboard with ShadcnUI components, Supabase database, automatic safety shutoff, and emergency SMS alerts via TextBee.
+IoT gas leak detection system with ESP32 hardware, GCP cloud backend, React dashboard with ShadcnUI components, Supabase database, automatic safety shutoff, and emergency SMS and phone call alerts via Twilio.
 
 ## Setup Instructions
 
@@ -124,12 +124,36 @@ curl -s ifconfig.me
 curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
 sudo apt install nodejs -y
 node --version  # Should show v18.x.x
-
-# Install additional packages for TextBee integration:
-sudo apt install git -y
 ```
 
-#### **3.3 Deploy MQTT Bridge & Emergency Alert Service**
+#### **3.3 Twilio Account Setup**
+
+1. **Create Twilio Account:**
+
+   - Go to [twilio.com](https://twilio.com) and sign up
+   - Verify your email and phone number
+
+2. **Get Twilio Phone Number:**
+
+   - Go to **Console → Phone Numbers → Buy a Number**
+   - Choose a number with Voice capability
+   - Click "Buy" (trial accounts get $15 credit)
+
+3. **Get API Credentials:**
+
+   - Go to **Console → Account → API keys & tokens**
+   - Copy:
+     - **Account SID**
+     - **Auth Token**
+     - **Phone Number**
+
+4. **Verify Emergency Numbers:**
+
+   - Go to **Console → Phone Numbers → Verified Caller IDs**
+   - Add and verify your emergency contact numbers
+   - **Note:** Trial accounts can only call verified numbers
+
+#### **3.4 Deploy MQTT Bridge**
 
 ```bash
 mkdir -p ~/gas-detection-backend
@@ -145,12 +169,13 @@ Add:
 {
   "name": "mqtt-bridge",
   "version": "1.0.0",
+  "main": "mqtt-bridge.js",
   "dependencies": {
     "mqtt": "^4.3.7",
     "@supabase/supabase-js": "^2.39.0",
-    "axios": "^1.6.0"
-  },
-  "main": "mqtt-bridge.js"
+    "twilio": "^4.19.4",
+    "dotenv": "^16.3.1"
+  }
 }
 ```
 
@@ -165,52 +190,28 @@ Add:
 SUPABASE_URL=your_supabase_project_url
 SUPABASE_KEY=your_supabase_anon_key
 MQTT_BROKER=mqtt://localhost:1883
-TEXTBEE_API_KEY=your_textbee_api_key
-TEXTBEE_DEVICE_ID=your_textbee_device_id
-EMERGENCY_CONTACT_1=+60143631375
-EMERGENCY_CONTACT_2=+60123456789
+TWILIO_ACCOUNT_SID=your_twilio_sid
+TWILIO_AUTH_TOKEN=your_twilio_token
+TWILIO_PHONE_NUMBER=sender_number
+EMERGENCY_CONTACTS=receiver_number
 ```
 
 ```bash
 npm install
 ```
 
-### **3.4 TextBee Emergency Alert Setup (Optional but Recommended)**
-
-1. **Register at TextBee:**
-
-   - Go to https://textbee.dev and create an account
-   - Get your API key and device ID from dashboard
-
-2. **Setup TextBee Android Gateway:**
-
-   - Install TextBee app on an Android phone
-   - Grant SMS permissions
-   - Scan QR code from dashboard to link device
-   - Keep phone connected to WiFi for SMS gateway
-
-3. **Create TextBee service file on VM:**
-
-```bash
-nano ~/gas-detection-backend/textbee-service.js
-```
-
-Add the TextBee service code (see `backend/textbee-service.js` in project files).
-
-### **Copy files to VM:**
-
-**On your computer:** Copy content from `backend/mqtt-bridge.js` and `backend/textbee-service.js`
+### **3.5 Copy Backend Files to VM:**
 
 **In GCP SSH terminal:**
 
 ```bash
 # 1. Create mqtt-bridge.js on VM
 nano ~/gas-detection-backend/mqtt-bridge.js
-# Paste content and save (Ctrl+O, Enter, Ctrl+X)
+# Paste content from backend/mqtt-bridge.js in project files
 
-# 2. Create textbee-service.js on VM
-nano ~/gas-detection-backend/textbee-service.js
-# Paste content and save (Ctrl+O, Enter, Ctrl+X)
+# 2. Create twilio-service.js on VM
+nano ~/gas-detection-backend/twilio-service.js
+# Paste content from backend/twilio-service.js in project files
 
 # 3. Create systemd service file
 sudo nano /etc/systemd/system/mqtt-bridge.service
@@ -220,7 +221,7 @@ Add:
 
 ```ini
 [Unit]
-Description=MQTT Bridge Service with Emergency Alerts
+Description=MQTT Bridge Service with Twilio Emergency Calls
 After=network.target mosquitto.service
 
 [Service]

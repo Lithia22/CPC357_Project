@@ -1,23 +1,32 @@
 const mqtt = require("mqtt");
 const { createClient } = require("@supabase/supabase-js");
-const TextBeeService = require("./textbee-service");
+const TwilioAlertService = require("./twilio-service.js");
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_KEY = process.env.SUPABASE_KEY;
-const MQTT_BROKER = process.env.MQTT_BROKER || "mqtt://localhost:1883";
+// Load environment variables
+require("dotenv").config();
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-const textBee = new TextBeeService();
+console.log("Starting MQTT Bridge with Twilio Emergency Calls...");
 
-const mqttClient = mqtt.connect(MQTT_BROKER, {
-  clientId: "mqtt_bridge_" + Math.random().toString(16).substr(2, 8),
-  clean: true,
-  reconnectPeriod: 1000,
-});
+// Initialize services
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_KEY
+);
 
+const twilioService = new TwilioAlertService();
+
+// Connect to MQTT broker
+const mqttClient = mqtt.connect(
+  process.env.MQTT_BROKER || "mqtt://localhost:1883"
+);
+
+console.log("Connecting to MQTT broker...");
+
+// MQTT Connection
 mqttClient.on("connect", () => {
   console.log("Connected to MQTT broker");
 
+  // Subscribe to topics
   mqttClient.subscribe("gas_sensor/data", (err) => {
     if (!err) console.log("Subscribed to gas_sensor/data");
   });
@@ -25,82 +34,147 @@ mqttClient.on("connect", () => {
   mqttClient.subscribe("gas_sensor/alerts", (err) => {
     if (!err) console.log("Subscribed to gas_sensor/alerts");
   });
+
+  mqttClient.subscribe("system/mode", (err) => {
+    if (!err) console.log("Subscribed to system/mode");
+  });
 });
 
+// Handle incoming messages
 mqttClient.on("message", async (topic, message) => {
   try {
     const data = JSON.parse(message.toString());
 
-    if (topic === "gas_sensor/data") {
-      const { error } = await supabase.from("sensor_readings").insert({
+    switch (topic) {
+      case "gas_sensor/data":
+        await handleSensorData(data);
+        break;
+      case "gas_sensor/alerts":
+        await handleAlertData(data);
+        break;
+      case "system/mode":
+        console.log(`System mode changed to: ${data}`);
+        break;
+    }
+  } catch (error) {
+    console.error("Error processing message:", error.message);
+  }
+});
+
+// Handle sensor data (save to database)
+async function handleSensorData(data) {
+  try {
+    const { error } = await supabase.from("sensor_readings").insert([
+      {
         gas_level: data.gas,
         temperature: data.temp,
         adjusted_threshold: data.threshold,
         mode: data.mode,
         valve_status: data.valve,
-        fan_status: data.fan === 1,
-      });
+        fan_status: data.fan,
+        timestamp: new Date(),
+      },
+    ]);
 
-      if (error) {
-        console.error("Supabase insert error:", error);
-      }
-
-      if (data.gas >= 3000) {
-        console.log(
-          `DANGER DETECTED: ${data.gas} PPM - Sending emergency alerts`
-        );
-
-        if (process.env.EMERGENCY_CONTACT_1) {
-          await textBee.sendEmergencySMS(
-            process.env.EMERGENCY_CONTACT_1,
-            data.gas,
-            data.temp
-          );
-        }
-
-        if (process.env.EMERGENCY_CONTACT_2) {
-          await textBee.sendEmergencySMS(
-            process.env.EMERGENCY_CONTACT_2,
-            data.gas,
-            data.temp
-          );
-        }
-      }
+    if (error) {
+      console.error("Database error:", error.message);
     }
-
-    if (topic === "gas_sensor/alerts") {
-      let alertType = "safe";
-      if (data.gas_level >= 3000) alertType = "danger";
-      else if (data.gas_level >= 1000) alertType = "warning";
-
-      const { error } = await supabase.from("alerts").insert({
-        message: data.alert,
-        gas_level: data.gas_level,
-        temperature: data.temp || null,
-        alert_type: alertType,
-      });
-
-      if (error) {
-        console.error("Alert insert error:", error);
-      }
-    }
-  } catch (err) {
-    console.error("Message processing error:", err);
+  } catch (error) {
+    console.error("Error saving sensor data:", error.message);
   }
+}
+
+// Handle alert data (trigger emergency calls)
+async function handleAlertData(data) {
+  try {
+    // Parse alert data
+    let alertData;
+    if (typeof data === "string") {
+      alertData = JSON.parse(data);
+    } else {
+      alertData = data;
+    }
+
+    // Get values
+    const gasLevel = alertData.gas_level || 0;
+    const temperature = alertData.temp || alertData.temperature || 0;
+    const alertMessage =
+      alertData.alert || alertData.message || "Gas leak detected";
+
+    // Determine alert type based on ESP32 logic
+    let alertType = "safe"; // Default for "system reset" messages
+
+    if (gasLevel >= 3000 || alertMessage.includes("EXTREME DANGER")) {
+      alertType = "danger";
+    } else if (gasLevel >= 1000 || alertMessage.includes("WARNING")) {
+      alertType = "warning";
+    } else if (alertMessage.includes("Gas leak detected")) {
+      alertType = "danger"; // Non-cooking mode gas leak
+    } else if (
+      alertMessage.includes("normal") ||
+      alertMessage.includes("reset")
+    ) {
+      alertType = "safe";
+    }
+
+    // Save to database
+    try {
+      await supabase.from("alerts").insert([
+        {
+          message: alertMessage,
+          gas_level: gasLevel,
+          temperature: temperature,
+          alert_type: alertType,
+          timestamp: new Date(),
+        },
+      ]);
+    } catch (dbError) {
+      console.error("Error saving alert to database:", dbError.message);
+    }
+
+    // Trigger emergency calls for critical alerts
+    if (alertType === "danger") {
+      console.log("CRITICAL GAS LEAK DETECTED! INITIATING EMERGENCY CALLS");
+      await twilioService.sendEmergencyAlert(
+        "CRITICAL GAS LEAK",
+        alertMessage,
+        gasLevel,
+        temperature
+      );
+    }
+    // Send SMS for warnings
+    else if (alertType === "warning") {
+      console.log("WARNING: High gas level detected");
+      await twilioService.sendEmergencyAlert(
+        "WARNING",
+        alertMessage,
+        gasLevel,
+        temperature
+      );
+    }
+    // Log safe status
+    else if (alertType === "safe") {
+      console.log("System returned to safe status");
+    }
+  } catch (error) {
+    console.error("Error handling alert:", error.message);
+  }
+}
+
+// Handle errors
+mqttClient.on("error", (error) => {
+  console.error("MQTT connection error:", error.message);
 });
 
-mqttClient.on("error", (err) => {
-  console.error("MQTT error:", err);
+mqttClient.on("close", () => {
+  console.log("MQTT connection closed");
 });
 
-mqttClient.on("offline", () => {
-  console.log("MQTT client offline, attempting reconnect");
+// Graceful shutdown
+process.on("SIGINT", () => {
+  console.log("Shutting down...");
+  mqttClient.end();
+  process.exit(0);
 });
 
-mqttClient.on("reconnect", () => {
-  console.log("Reconnecting to MQTT broker");
-});
-
-console.log("MQTT Bridge started");
-console.log("Broker:", MQTT_BROKER);
-console.log("Supabase URL:", SUPABASE_URL);
+console.log("MQTT Bridge with Twilio Emergency Calls is READY!");
