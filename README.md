@@ -193,7 +193,7 @@ MQTT_BROKER=mqtt://localhost:1883
 TWILIO_ACCOUNT_SID=your_twilio_sid
 TWILIO_AUTH_TOKEN=your_twilio_token
 TWILIO_PHONE_NUMBER=sender_number
-EMERGENCY_CONTACTS=receiver_number
+EMERGENCY_CONTACT=receiver_number
 ```
 
 ```bash
