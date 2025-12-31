@@ -43,7 +43,21 @@ mqttClient.on("connect", () => {
 // Handle incoming messages
 mqttClient.on("message", async (topic, message) => {
   try {
-    const data = JSON.parse(message.toString());
+    const messageStr = message.toString();
+
+    // Try to parse as JSON
+    let data;
+    try {
+      data = JSON.parse(messageStr);
+    } catch (jsonError) {
+
+      if (messageStr.length > 0) {
+        console.log(
+          `[${topic}] Non-JSON message: ${messageStr.substring(0, 50)}...`
+        );
+      }
+      return;
+    }
 
     switch (topic) {
       case "gas_sensor/data":
@@ -84,7 +98,7 @@ async function handleSensorData(data) {
   }
 }
 
-// Handle alert data (trigger emergency calls)
+// Handle alert data
 async function handleAlertData(data) {
   try {
     // Parse alert data
@@ -106,13 +120,32 @@ async function handleAlertData(data) {
 
     if (gasLevel >= 3000 || alertMessage.includes("EXTREME DANGER")) {
       alertType = "danger";
-    } else if (gasLevel >= 1000 || alertMessage.includes("WARNING")) {
-      alertType = "warning";
     } else if (alertMessage.includes("Gas leak detected")) {
-      alertType = "danger"; // Non-cooking mode gas leak
+      // Any gas leak detection in non-cooking mode is DANGER
+      alertType = "danger";
+    } else if (
+      alertMessage.includes("SAFETY") &&
+      alertMessage.includes("Valve closed")
+    ) {
+      // Valve closure due to high gas is DANGER
+      alertType = "danger";
+    } else if (gasLevel >= 1000) {
+      // Gas level above 1000 is at least a warning, could be danger
+      if (
+        alertMessage.includes("WARNING") ||
+        alertMessage.includes("cooking")
+      ) {
+        alertType = "warning";
+      } else {
+        // If not explicitly cooking mode warning, treat as danger
+        alertType = "danger";
+      }
+    } else if (alertMessage.includes("WARNING")) {
+      alertType = "warning";
     } else if (
       alertMessage.includes("normal") ||
-      alertMessage.includes("reset")
+      alertMessage.includes("reset") ||
+      alertMessage.includes("reopened")
     ) {
       alertType = "safe";
     }
@@ -132,7 +165,7 @@ async function handleAlertData(data) {
       console.error("Error saving alert to database:", dbError.message);
     }
 
-    // Trigger emergency calls for critical alerts
+    // Trigger emergency calls ONLY for critical alerts (DANGER)
     if (alertType === "danger") {
       console.log("CRITICAL GAS LEAK DETECTED! INITIATING EMERGENCY CALLS");
       await twilioService.sendEmergencyAlert(
@@ -141,16 +174,8 @@ async function handleAlertData(data) {
         gasLevel,
         temperature
       );
-    }
-    // Send SMS for warnings
-    else if (alertType === "warning") {
-      console.log("WARNING: High gas level detected");
-      await twilioService.sendEmergencyAlert(
-        "WARNING",
-        alertMessage,
-        gasLevel,
-        temperature
-      );
+    } else if (alertType === "warning") {
+      console.log("WARNING: High gas level detected - No notification sent");
     }
     // Log safe status
     else if (alertType === "safe") {
