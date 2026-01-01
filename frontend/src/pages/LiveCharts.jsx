@@ -19,59 +19,115 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
+
 function LiveCharts() {
   const [combinedData, setCombinedData] = useState([]);
   const [currentGas, setCurrentGas] = useState(0);
   const [currentTemp, setCurrentTemp] = useState(0);
   const [currentMode, setCurrentMode] = useState("non_cooking");
-  const [adjustedThreshold, setAdjustedThreshold] = useState(1000);
-  const calculateAdjustedThreshold = (temp, baseThreshold = 1000) => {
-    if (temp > 35) return Math.round(baseThreshold * 1.5);
-    if (temp < 15) return Math.round(baseThreshold * 0.7);
-    return baseThreshold;
-  };
+  const BASE_THRESHOLD = 1000;
+  const COOKING_DANGER_THRESHOLD = 3000;
+
   useEffect(() => {
     const initializeData = async () => {
       try {
-        const readings = await getRecentReadings(20);
-        const formattedData = readings.reverse().map((r) => ({
-          time: new Date(r.timestamp).toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
-          gas: r.gas_level,
-          temp: Math.round(r.temperature),
-        }));
+        // Get 60 minutes of data instead of 20 seconds
+        const readings = await getRecentReadings(3600); // 60 minutes * 60 seconds
+
+        // Group by minute
+        const minuteData = {};
+        readings.forEach((r) => {
+          const date = new Date(r.timestamp);
+          const minuteKey = `${date.getHours()}:${date
+            .getMinutes()
+            .toString()
+            .padStart(2, "0")}`;
+
+          if (!minuteData[minuteKey]) {
+            minuteData[minuteKey] = {
+              time: minuteKey,
+              gas: r.gas_level,
+              temp: Math.round(r.temperature),
+              count: 1,
+            };
+          } else {
+            minuteData[minuteKey].gas = Math.round(
+              (minuteData[minuteKey].gas * minuteData[minuteKey].count +
+                r.gas_level) /
+                (minuteData[minuteKey].count + 1)
+            );
+            minuteData[minuteKey].temp = Math.round(
+              (minuteData[minuteKey].temp * minuteData[minuteKey].count +
+                r.temperature) /
+                (minuteData[minuteKey].count + 1)
+            );
+            minuteData[minuteKey].count += 1;
+          }
+        });
+
+        const formattedData = Object.values(minuteData)
+          .map((item) => ({
+            time: item.time,
+            gas: item.gas,
+            temp: item.temp,
+          }))
+          .sort((a, b) => a.time.localeCompare(b.time))
+          .slice(-30);
+
         setCombinedData(formattedData);
+
         if (readings.length > 0) {
           const latest = readings[readings.length - 1];
           setCurrentGas(latest.gas_level);
           setCurrentTemp(Math.round(latest.temperature));
-          setAdjustedThreshold(latest.adjusted_threshold);
+          setCurrentMode(latest.mode);
         }
       } catch (err) {
         console.error("Error loading chart data:", err);
       }
+
       const brokerUrl =
         process.env.REACT_APP_MQTT_BROKER || "ws://localhost:9001";
       try {
         await mqttService.connect(brokerUrl);
+
         mqttService.subscribe("gas_sensor/data", (data) => {
-          const time = new Date().toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          });
+          const now = new Date();
+          const currentMinute = `${now.getHours()}:${now
+            .getMinutes()
+            .toString()
+            .padStart(2, "0")}`;
+
           setCombinedData((prev) => {
-            const updated = [
-              ...prev.slice(1),
-              { time, gas: data.gas, temp: Math.round(data.temp) },
-            ];
-            return updated;
+            // Check if we already have data for this minute
+            const existingIndex = prev.findIndex(
+              (item) => item.time === currentMinute
+            );
+
+            if (existingIndex >= 0) {
+              // Update existing minute data with average
+              const updated = [...prev];
+              const existing = updated[existingIndex];
+              updated[existingIndex] = {
+                time: currentMinute,
+                gas: Math.round((existing.gas + data.gas) / 2),
+                temp: Math.round((existing.temp + Math.round(data.temp)) / 2),
+              };
+              return updated;
+            } else {
+              // Add new minute data
+              const newItem = {
+                time: currentMinute,
+                gas: data.gas,
+                temp: Math.round(data.temp),
+              };
+              return [...prev.slice(1), newItem];
+            }
           });
+
           setCurrentGas(data.gas);
           setCurrentTemp(Math.round(data.temp));
           setCurrentMode(data.mode);
-          setAdjustedThreshold(data.threshold);
         });
       } catch (err) {
         console.error("MQTT connection failed:", err);
@@ -86,20 +142,20 @@ function LiveCharts() {
   }, []);
   const getGasStatus = (value) => {
     if (currentMode === "cooking") {
-      const warningThreshold = calculateAdjustedThreshold(currentTemp, 1000);
-      const dangerThreshold = calculateAdjustedThreshold(currentTemp, 3000);
-      if (value >= dangerThreshold)
+      if (value >= COOKING_DANGER_THRESHOLD)
         return { label: "DANGER", variant: "destructive" };
-      if (value >= warningThreshold)
+      if (value >= BASE_THRESHOLD)
         return { label: "WARNING", variant: "secondary" };
       return { label: "SAFE", variant: "default" };
     } else {
-      if (value >= adjustedThreshold)
+      if (value >= BASE_THRESHOLD)
         return { label: "DANGER", variant: "destructive" };
       return { label: "SAFE", variant: "default" };
     }
   };
+
   const gasStatus = getGasStatus(currentGas);
+
   return (
     <div className="p-6 space-y-6">
       <div>
@@ -107,7 +163,8 @@ function LiveCharts() {
           Live Monitoring
         </h1>
         <p className="text-gray-600">Real-time sensor data visualization</p>
-      </div>{" "}
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card className="border-2">
           <CardContent className="p-6">
@@ -134,17 +191,30 @@ function LiveCharts() {
               <span className="text-xl font-semibold text-gray-500">PPM</span>
             </div>
             <p className="text-sm text-gray-500 mt-2">
-              Threshold: {adjustedThreshold} PPM
+              Threshold: {BASE_THRESHOLD} PPM
+            </p>
+            <p className="text-xs text-gray-400 mt-1">
+              Cooking mode:{" "}
+              {currentMode === "cooking"
+                ? "3000 PPM = DANGER"
+                : "1000 PPM = DANGER"}
             </p>
           </CardContent>
-        </Card>{" "}
+        </Card>
+
         <Card className="border-2">
           <CardContent className="p-6">
             <div className="flex justify-between items-center mb-4">
               <div className="text-sm font-medium text-gray-600">
                 Current Temperature
               </div>
-              <Badge variant="secondary">NORMAL</Badge>
+              <Badge variant="secondary">
+                {currentTemp > 30
+                  ? "HOT"
+                  : currentTemp < 25
+                  ? "COOL"
+                  : "NORMAL"}
+              </Badge>
             </div>
             <div className="flex items-baseline gap-2">
               <span className="text-5xl font-bold text-gray-900">
@@ -152,16 +222,24 @@ function LiveCharts() {
               </span>
               <span className="text-xl font-semibold text-gray-500">°C</span>
             </div>
-            <p className="text-sm text-gray-500 mt-2">Live reading</p>
+            <p className="text-sm text-gray-500 mt-2">
+              {currentTemp > 30
+                ? "Fan: ON"
+                : currentTemp < 25
+                ? "Fan: OFF"
+                : "Fan: Auto"}
+            </p>
           </CardContent>
         </Card>
-      </div>{" "}
+      </div>
+
       {/* Gas Level Chart */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             Gas Level Trend
           </CardTitle>
+          <p className="text-sm text-gray-500">Minute-by-minute averages</p>
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={300}>
@@ -174,7 +252,7 @@ function LiveCharts() {
                 dataKey="time"
                 tick={{ fill: "#666", fontSize: 12 }}
                 label={{
-                  value: "Time",
+                  value: "Time (HH:MM)",
                   position: "outside",
                   offset: 5,
                   fill: "#666",
@@ -210,7 +288,8 @@ function LiveCharts() {
             </BarChart>
           </ResponsiveContainer>
         </CardContent>
-      </Card>{" "}
+      </Card>
+
       {/* Temperature Chart */}
       <Card>
         <CardHeader>
@@ -267,10 +346,11 @@ function LiveCharts() {
             </LineChart>
           </ResponsiveContainer>
         </CardContent>
-      </Card>{" "}
+      </Card>
+
       <Card>
         <CardHeader>
-          <CardTitle>Recent Readings</CardTitle>
+          <CardTitle>Recent Readings (Minute Averages)</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">

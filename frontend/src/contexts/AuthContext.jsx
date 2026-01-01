@@ -99,7 +99,7 @@ export const AuthProvider = ({ children }) => {
         options: {
           data: {
             name: name,
-            role: "chef", // Default role for new signups
+            role: "user", // Default role for new signups
           },
         },
       });

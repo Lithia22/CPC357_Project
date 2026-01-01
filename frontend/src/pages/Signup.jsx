@@ -12,7 +12,7 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Alert, AlertDescription } from "../components/ui/alert";
-import { AlertCircle, UserPlus } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 import gasImage from "../assets/images/gas.png";
 
 function Signup() {

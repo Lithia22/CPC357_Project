@@ -12,7 +12,7 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Alert, AlertDescription } from "../components/ui/alert";
-import { AlertCircle, LogIn } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 import gasImage from "../assets/images/gas.png";
 
 function Login() {
@@ -123,10 +123,10 @@ function Login() {
                 type="button"
                 className="text-primary font-medium hover:underline"
                 onClick={async () => {
-                  setEmail("chef@kitchen.com");
-                  setPassword("chef123");
+                  setEmail("user@kitchen.com");
+                  setPassword("user123");
                   // Auto-submit after filling
-                  const result = await login("chef@kitchen.com", "chef123");
+                  const result = await login("user@kitchen.com", "user123");
                   if (result.success) {
                     navigate("/dashboard");
                   } else {

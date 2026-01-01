@@ -6,17 +6,24 @@ IoT gas leak detection system with ESP32 hardware, GCP cloud backend, React dash
 
 ## Setup Instructions
 
-### Step 1: Configure ESP32
+### Step 1: Quick Start and Configure ESP32
 
-1. Open `ESP32/include/config.h`
-2. Update these values:
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/Lithia22/CPC357_Project.git
+   cd CPC357_Project
+   ```
 
-```cpp
-#define WIFI_SSID "YOUR_WIFI_NAME"
-#define WIFI_PASSWORD "YOUR_WIFI_PASSWORD"
-#define MQTT_SERVER "YOUR_GCP_VM_IP"  // From Step 3.2
-```
+2. **Configure ESP32:**
+   - Open `ESP32/include/config.h`
+   - Update these values:
 
+   ```cpp
+   #define WIFI_SSID "YOUR_WIFI_NAME"
+   #define WIFI_PASSWORD "YOUR_WIFI_PASSWORD"
+   #define MQTT_SERVER "YOUR_GCP_VM_IP"  // From Step 3.2
+   ```
+   
 ### Step 2: Supabase Database Setup
 
 1. Create account at [supabase.com](https://supabase.com)
@@ -46,8 +53,8 @@ CREATE TABLE alerts (
 
 3. Go to **Authentication → Users** → Click **"Add User"**:
 
-- **Email**: `chef@kitchen.com`
-- **Password**: `chef123`
+- **Email**: `user@kitchen.com`
+- **Password**: `user123`
 - Click **"Create User"**
 
 **Note**: Disable email confirmation in **Authentication → Providers → Email** → Turn OFF "Confirm email" → Save

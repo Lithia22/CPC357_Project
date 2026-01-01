@@ -4,6 +4,7 @@ import {
   Routes,
   Route,
   Navigate,
+  Outlet,
 } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import {
@@ -69,11 +70,7 @@ function MainLayout() {
             </div>
           </div>
           <main className="flex-1 overflow-y-auto p-4 md:p-6">
-            <Routes>
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/live-charts" element={<LiveCharts />} />
-              <Route path="/alerts" element={<AlertsHistory />} />
-            </Routes>
+            <Outlet />
           </main>
         </SidebarInset>
       </div>
