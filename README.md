@@ -2,7 +2,31 @@
 
 ## Project Overview
 
-IoT gas leak detection system with ESP32 hardware, GCP cloud backend, React dashboard with ShadcnUI components, Supabase database, automatic safety shutoff, and emergency SMS and phone call alerts via Twilio.
+IoT-based smart kitchen gas leak detection system designed to enhance safety, contributing to **UN Sustainable Development Goal (SDG) 11: Sustainable Cities and Communities**.
+
+**System Features:**
+- Real-time gas leak detection and monitoring
+- Automatic safety response (valve shutoff, ventilation, buzzer alert)
+- Emergency SMS and phone call alerts
+- Cloud-based data storage
+- Web dashboard for remote monitoring
+
+**Technology Stack:**
+- **Hardware**: ESP32 microcontroller, MQ2 gas sensor, DHT11 temperature sensor
+- **Cloud**: Google Cloud Platform (GCP) VM, Mosquitto MQTT Broker
+- **Database**: Supabase (PostgreSQL)
+- **Frontend**: React.js with ShadcnUI components
+- **Communication Protocol**: MQTT (Message Queue Telemetry Transport)
+- **Emergency Alerts**: Twilio API
+
+## Prerequisites
+
+- ESP32-S3 development board
+- PlatformIO IDE (VS Code extension)
+- Node.js v18 or higher
+- Google Cloud Platform account
+- Supabase account
+- Twilio account
 
 ## Setup Instructions
 
