@@ -12,9 +12,9 @@
 #define MQTT_PASSWORD ""
 
 // MQTT Topics
-#define TOPIC_GAS_DATA "gas_sensor/data"
-#define TOPIC_GAS_ALERT "gas_sensor/alerts"
-#define TOPIC_MODE_STATUS "system/mode"
+#define TOPIC_GAS_DATA "gas_sensor/data"    // Telemetry data (sensor readings)
+#define TOPIC_GAS_ALERT "gas_sensor/alerts" // Alert messages (emergency notifications)
+#define TOPIC_MODE_STATUS "system/mode"     // System mode changes (cooking/non-cooking)
 
 // Pin Definitions
 #define MQ2_PIN 15

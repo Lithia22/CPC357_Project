@@ -31,8 +31,8 @@ function LiveCharts() {
   useEffect(() => {
     const initializeData = async () => {
       try {
-        // Get 60 minutes of data instead of 20 seconds
-        const readings = await getRecentReadings(3600); // 60 minutes * 60 seconds
+        // Fetch historical data from database
+        const readings = await getRecentReadings(3600);
 
         // Group by minute
         const minuteData = {};
@@ -73,7 +73,7 @@ function LiveCharts() {
           }))
           .sort((a, b) => a.time.localeCompare(b.time))
           .slice(-30);
-
+          
         setCombinedData(formattedData);
 
         if (readings.length > 0) {
@@ -86,11 +86,13 @@ function LiveCharts() {
         console.error("Error loading chart data:", err);
       }
 
+      // Subscribe to MQTT for live updates
       const brokerUrl =
         process.env.REACT_APP_MQTT_BROKER || "ws://localhost:9001";
       try {
         await mqttService.connect(brokerUrl);
 
+        // Subscribe to sensor data topic
         mqttService.subscribe("gas_sensor/data", (data) => {
           const now = new Date();
           const currentMinute = `${now.getHours()}:${now
@@ -98,6 +100,7 @@ function LiveCharts() {
             .toString()
             .padStart(2, "0")}`;
 
+          // Update chart data with new readings
           setCombinedData((prev) => {
             // Check if we already have data for this minute
             const existingIndex = prev.findIndex(
@@ -105,7 +108,6 @@ function LiveCharts() {
             );
 
             if (existingIndex >= 0) {
-              // Update existing minute data with average
               const updated = [...prev];
               const existing = updated[existingIndex];
               updated[existingIndex] = {
@@ -115,7 +117,6 @@ function LiveCharts() {
               };
               return updated;
             } else {
-              // Add new minute data
               const newItem = {
                 time: currentMinute,
                 gas: data.gas,
@@ -140,6 +141,7 @@ function LiveCharts() {
       mqttService.disconnect();
     };
   }, []);
+
   const getGasStatus = (value) => {
     if (currentMode === "cooking") {
       if (value >= COOKING_DANGER_THRESHOLD)
@@ -233,7 +235,7 @@ function LiveCharts() {
         </Card>
       </div>
 
-      {/* Gas Level Chart */}
+      {/* Data Visualization: Gas Level Bar Chart */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -290,7 +292,7 @@ function LiveCharts() {
         </CardContent>
       </Card>
 
-      {/* Temperature Chart */}
+      {/* Data Visualization: Temperature Line Chart */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -348,6 +350,7 @@ function LiveCharts() {
         </CardContent>
       </Card>
 
+      {/* Data Visualization: Data Table */}
       <Card>
         <CardHeader>
           <CardTitle>Recent Readings (Minute Averages)</CardTitle>

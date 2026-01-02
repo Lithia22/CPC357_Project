@@ -18,20 +18,20 @@ void beepBuzzer(int times, int duration);
 void controlFanBasedOnTemperature();
 
 WiFiClient wifiClient;
-PubSubClient mqttClient(wifiClient);
+PubSubClient mqttClient(wifiClient); // Publisher
 DHT dht(DHT11_PIN, DHT11);
 Servo lpgValve;
 
-int gasValue = 0;                    // Current gas reading from MQ2 sensor
-float temperature = 25.0;            // Current temperature from DHT11
-bool isCookingMode = false;          // Cooking mode flag (true = cooking, false = non-cooking)
-bool gasAlertActive = false;         // Gas alert active flag
-bool valveClosed = false;            // Gas valve state (true = closed, false = open)
-unsigned long gasAlertStartTime = 0; // Timer for valve closure delay
-unsigned long lastMqttPublish = 0;   // Timer for MQTT publishing
-unsigned long lastButtonCheck = 0;   // Timer for button debouncing
-bool buttonPressed = false;          // Button state flag
-unsigned long lastFanCheck = 0;      // Timer for fan control
+int gasValue = 0;                    
+float temperature = 25.0;            
+bool isCookingMode = false;          
+bool gasAlertActive = false;         
+bool valveClosed = false;           
+unsigned long gasAlertStartTime = 0;
+unsigned long lastMqttPublish = 0;
+unsigned long lastButtonCheck = 0;  
+bool buttonPressed = false;         
+unsigned long lastFanCheck = 0;     
 
 void setup()
 {
@@ -55,6 +55,7 @@ void setup()
 
     setupWiFi();
 
+    // MQTT Broker Configuration
     mqttClient.setServer(MQTT_SERVER, MQTT_PORT);
 
     beepBuzzer(2, 100);
@@ -80,10 +81,10 @@ void loop()
     processGasReading();            // Core safety logic - detects gas leaks
     controlFanBasedOnTemperature(); // Smart fan control based on temperature
 
-    // Publish data to MQTT every MQTT_UPDATE_INTERVAL (1 second)
+    // Telemetry: Publish sensor data to MQTT Broker every 1 second
     if (millis() - lastMqttPublish >= MQTT_UPDATE_INTERVAL)
     {
-        publishData();
+        publishData(); // Publisher sends data to Broker
         lastMqttPublish = millis();
     }
 
@@ -115,7 +116,7 @@ void setupWiFi()
 
 void reconnectMQTT()
 {
-    // Reconnect to MQTT broker with 5-second cooldown
+    // Reconnect to MQTT Broker with 5-second cooldown
     static unsigned long lastAttempt = 0;
     if (millis() - lastAttempt < 5000)
         return;
@@ -145,14 +146,14 @@ void controlFanBasedOnTemperature()
     {
         lastFanCheck = millis();
 
-        // PRIORITY 1: Emergency situations - Fan MUST stay ON
+        // Emergency situations - Fan MUST stay ON
         if (gasAlertActive || valveClosed)
         {
             digitalWrite(RELAY_PIN, HIGH); // Fan ON for ventilation
             return;
         }
 
-        // PRIORITY 2: Normal temperature-based control
+        // Normal temperature-based control
         if (temperature > 35.0) // >35°C = turn fan ON
         {
             digitalWrite(RELAY_PIN, HIGH);
@@ -178,7 +179,7 @@ void handleButtonPress()
         isCookingMode = !isCookingMode;
         beepBuzzer(1, 100);
 
-        // Publish mode change to MQTT
+        // MQTT Publish: Send mode change to Topic "system/mode"
         String modeMsg = isCookingMode ? "cooking_mode" : "non_cooking_mode";
         mqttClient.publish(TOPIC_MODE_STATUS, modeMsg.c_str());
 
@@ -291,7 +292,7 @@ void activateSafetyMode()
     lpgValve.write(VALVE_CLOSED);
     delay(500);
 
-    // Send alerts
+    // MQTT Publish: Send emergency alerts to Broker
     publishAlert("SAFETY: Valve closed due to high gas", gasValue);
     mqttClient.publish(TOPIC_GAS_ALERT, "Gas valve closed for safety");
 }
@@ -309,10 +310,12 @@ void deactivateSafetyMode()
     lpgValve.write(VALVE_OPEN);
     delay(500);
 
+    // MQTT Publish: Send system reset notification to Broker
     publishAlert("System reset - Valve reopened", gasValue);
     mqttClient.publish(TOPIC_GAS_ALERT, "Gas valve reopened - Safe to continue");
 }
 
+// Publishes sensor telemetry data to MQTT Topic "gas_sensor/data"
 void publishData()
 {
     char dataBuffer[256];
@@ -342,6 +345,7 @@ void publishData()
     mqttClient.publish(TOPIC_GAS_DATA, dataBuffer);
 }
 
+// Publishes alert messages to MQTT Topic "gas_sensor/alerts"
 void publishAlert(const char *message, int gasLevel)
 {
     // Publish alert message to MQTT

@@ -11,21 +11,17 @@ import {
 } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
-import {
-  Bell,
-  AlertTriangle,
-  ShieldCheck,
-  ShieldAlert,
-} from "lucide-react";
+import { Bell, AlertTriangle, ShieldCheck, ShieldAlert } from "lucide-react";
 
 function AlertsHistory() {
   const [alerts, setAlerts] = useState([]);
   const [filter, setFilter] = useState("all");
   const [loading, setLoading] = useState(true);
-
+  
   useEffect(() => {
     const loadAlerts = async () => {
       try {
+        // Fetch recent alerts from database (processed alerts from backend)
         const data = await getRecentAlerts();
         setAlerts(data);
         setLoading(false);
@@ -37,6 +33,7 @@ function AlertsHistory() {
 
     loadAlerts();
 
+    // Subscribe to real-time alert updates from Supabase
     const channel = subscribeToAlerts((newAlert) => {
       setAlerts((prev) => [newAlert, ...prev]);
     });
@@ -171,7 +168,7 @@ function AlertsHistory() {
         ))}
       </div>
 
-      {/* Alerts Table */}
+      {/* Data Visualization: Alerts Table */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">

@@ -46,20 +46,21 @@ function Dashboard() {
       }
       if (gasLevel >= BASE_THRESHOLD) {
         console.log("  Result: WARNING (cooking, >=1000)");
-        return { label: "WARNING", variant: "warning", text: "WARNING" }; 
+        return { label: "WARNING", variant: "warning", text: "WARNING" };
       }
       console.log("  Result: SAFE (cooking, <1000)");
-      return { label: "SAFE", variant: "safe", text: "SAFE" }; 
+      return { label: "SAFE", variant: "safe", text: "SAFE" };
     } else {
       if (gasLevel >= BASE_THRESHOLD) {
         console.log("  Result: DANGER (non-cooking, >=1000)");
-        return { label: "DANGER", variant: "danger", text: "DANGER" }; 
+        return { label: "DANGER", variant: "danger", text: "DANGER" };
       }
       console.log("  Result: SAFE (non-cooking, <1000)");
       return { label: "SAFE", variant: "safe", text: "SAFE" };
     }
   };
 
+  // Classifies temperature into HOT/WARM/COOL categories
   const getTemperatureStatus = (temp) => {
     if (temp > 35) return { status: "HOT", fan: "ON", variant: "warning" };
     if (temp < 25) return { status: "COOL", fan: "OFF", variant: "safe" };
@@ -70,6 +71,7 @@ function Dashboard() {
     const status = getGasStatus();
     const initializeData = async () => {
       try {
+        // Fetch latest reading from database
         const latest = await getLatestReading();
         if (latest) {
           setGasLevel(latest.gas_level);
@@ -82,6 +84,7 @@ function Dashboard() {
         console.error("Error fetching initial data:", err);
       }
 
+      // Connect to MQTT for real-time updates
       const brokerUrl =
         process.env.REACT_APP_MQTT_BROKER || "ws://localhost:9001";
 
@@ -90,7 +93,9 @@ function Dashboard() {
         await mqttService.connect(brokerUrl);
         setMqttConnected(mqttService.isConnected());
         if (mqttService.isConnected()) {
+          // Subscribe to real-time sensor data
           await mqttService.subscribe("gas_sensor/data", (data) => {
+            // Update state with new real-time data
             setGasLevel(data.gas);
             setTemperature(data.temp);
             setMode(data.mode);
@@ -107,6 +112,7 @@ function Dashboard() {
 
     initializeData();
 
+    // Subscribe to Supabase real-time updates
     const readingsChannel = subscribeToReadings((newReading) => {
       console.log("Supabase new reading:", newReading);
       setGasLevel(newReading.gas_level);
@@ -189,12 +195,11 @@ function Dashboard() {
                 style={{ width: `${Math.min((gasLevel / 5000) * 100, 100)}%` }}
               />
             </div>
-            <div className="mt-2 text-sm text-gray-600">
-            </div>
           </div>
         </CardContent>
       </Card>
 
+      {/* Data Visualization */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatsCard
           image={dht11Image}
@@ -204,6 +209,7 @@ function Dashboard() {
           variant={tempStatus.variant}
         />
 
+        {/* Cooking vs Non-Cooking Mode Card*/}
         <Card className="bg-gradient-to-br from-primary to-orange-600 border-0 hover:shadow-lg transition-all">
           <CardContent className="p-6 flex flex-col h-full">
             <div>
@@ -232,6 +238,7 @@ function Dashboard() {
           </CardContent>
         </Card>
 
+        {/* Gas Valve Status Card */}
         <StatsCard
           image={lpgValveImage}
           label="Gas Valve"
@@ -240,6 +247,7 @@ function Dashboard() {
           variant={valve === "closed" ? "danger" : "safe"}
         />
 
+        {/* Exhaust Fan Status Card */}
         <StatsCard
           image={fanMotorImage}
           label="Exhaust Fan"
@@ -250,6 +258,7 @@ function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Buzzer Alarm Status Card */}
         <StatsCard
           image={buzzerImage}
           label="Buzzer Alarm"
@@ -257,6 +266,8 @@ function Dashboard() {
           subtext={buzzer ? "Alert sound on" : "No alarm"}
           variant={buzzer ? "danger" : "default"}
         />
+
+        {/* MQTT Connection Status Card */}
         <StatsCard
           image={esp32Image}
           label="MQTT Connection"
