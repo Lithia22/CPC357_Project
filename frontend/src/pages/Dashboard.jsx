@@ -28,7 +28,46 @@ function Dashboard() {
   const BASE_THRESHOLD = 1000;
   const COOKING_DANGER_THRESHOLD = 3000;
 
+  const getGasStatus = () => {
+    console.log("DEBUG - getGasStatus called:");
+    console.log(
+      "  Gas:",
+      gasLevel,
+      "| Mode:",
+      mode,
+      "| BASE_THRESHOLD:",
+      BASE_THRESHOLD
+    );
+
+    if (mode === "cooking") {
+      if (gasLevel >= COOKING_DANGER_THRESHOLD) {
+        console.log("  Result: DANGER (cooking, >=3000)");
+        return { label: "DANGER", variant: "danger", text: "DANGER" };
+      }
+      if (gasLevel >= BASE_THRESHOLD) {
+        console.log("  Result: WARNING (cooking, >=1000)");
+        return { label: "WARNING", variant: "warning", text: "WARNING" }; 
+      }
+      console.log("  Result: SAFE (cooking, <1000)");
+      return { label: "SAFE", variant: "safe", text: "SAFE" }; 
+    } else {
+      if (gasLevel >= BASE_THRESHOLD) {
+        console.log("  Result: DANGER (non-cooking, >=1000)");
+        return { label: "DANGER", variant: "danger", text: "DANGER" }; 
+      }
+      console.log("  Result: SAFE (non-cooking, <1000)");
+      return { label: "SAFE", variant: "safe", text: "SAFE" };
+    }
+  };
+
+  const getTemperatureStatus = (temp) => {
+    if (temp > 35) return { status: "HOT", fan: "ON", variant: "warning" };
+    if (temp < 25) return { status: "COOL", fan: "OFF", variant: "safe" };
+    return { status: "WARM", fan: "Auto", variant: "default" };
+  };
+
   useEffect(() => {
+    const status = getGasStatus();
     const initializeData = async () => {
       try {
         const latest = await getLatestReading();
@@ -69,6 +108,7 @@ function Dashboard() {
     initializeData();
 
     const readingsChannel = subscribeToReadings((newReading) => {
+      console.log("Supabase new reading:", newReading);
       setGasLevel(newReading.gas_level);
       setTemperature(newReading.temperature);
       setMode(newReading.mode);
@@ -77,7 +117,7 @@ function Dashboard() {
     });
 
     const alertsChannel = subscribeToAlerts((newAlert) => {
-      // Handle alerts if needed
+      console.log("New alert:", newAlert);
     });
 
     return () => {
@@ -87,27 +127,7 @@ function Dashboard() {
     };
   }, []);
 
-  const getGasStatus = () => {
-    if (mode === "cooking") {
-      if (gasLevel >= COOKING_DANGER_THRESHOLD)
-        return { label: "DANGER", variant: "destructive", text: "DANGER" };
-      if (gasLevel >= BASE_THRESHOLD)
-        return { label: "WARNING", variant: "secondary", text: "WARNING" };
-      return { label: "SAFE", variant: "default", text: "SAFE" };
-    } else {
-      if (gasLevel >= BASE_THRESHOLD)
-        return { label: "DANGER", variant: "destructive", text: "DANGER" };
-      return { label: "SAFE", variant: "default", text: "SAFE" };
-    }
-  };
-
   const gasStatus = getGasStatus();
-  const getTemperatureStatus = (temp) => {
-    if (temp > 30) return { status: "HOT", fan: "ON", variant: "warning" };
-    if (temp < 25) return { status: "COOL", fan: "OFF", variant: "safe" };
-    return { status: "WARM", fan: "Auto", variant: "default" };
-  };
-
   const tempStatus = getTemperatureStatus(temperature);
 
   return (
@@ -170,11 +190,6 @@ function Dashboard() {
               />
             </div>
             <div className="mt-2 text-sm text-gray-600">
-              <p>
-                {mode === "cooking"
-                  ? `Cooking Mode: ${BASE_THRESHOLD}+ PPM = WARNING, ${COOKING_DANGER_THRESHOLD}+ PPM = DANGER`
-                  : `Non-Cooking Mode: ${BASE_THRESHOLD}+ PPM = DANGER`}
-              </p>
             </div>
           </div>
         </CardContent>

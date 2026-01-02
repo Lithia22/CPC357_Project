@@ -6,7 +6,6 @@
 #include "config.h"
 
 void setupWiFi();
-void mqttCallback(char *topic, byte *payload, unsigned int length);
 void reconnectMQTT();
 void readSensors();
 void processGasReading();
@@ -57,7 +56,6 @@ void setup()
     setupWiFi();
 
     mqttClient.setServer(MQTT_SERVER, MQTT_PORT);
-    mqttClient.setCallback(mqttCallback);
 
     beepBuzzer(2, 100);
 }
@@ -115,26 +113,6 @@ void setupWiFi()
     }
 }
 
-void mqttCallback(char *topic, byte *payload, unsigned int length)
-{
-    // Handle incoming MQTT messages from web dashboard
-    String message;
-    for (unsigned int i = 0; i < length; i++)
-    {
-        message += (char)payload[i];
-    }
-
-    String topicStr = String(topic);
-
-    if (topicStr == TOPIC_ACTUATOR_CMD)
-    {
-        if (message == "emergency_stop")
-        {
-            activateSafetyMode();
-        }
-    }
-}
-
 void reconnectMQTT()
 {
     // Reconnect to MQTT broker with 5-second cooldown
@@ -146,11 +124,6 @@ void reconnectMQTT()
 
     String clientId = "ESP32-GasDetector-";
     clientId += String(random(0xffff), HEX);
-
-    if (mqttClient.connect(clientId.c_str(), MQTT_USER, MQTT_PASSWORD))
-    {
-        mqttClient.subscribe(TOPIC_ACTUATOR_CMD);
-    }
 }
 
 void readSensors()
@@ -168,28 +141,26 @@ void readSensors()
 
 void controlFanBasedOnTemperature()
 {
-    // Smart fan control based on temperature and safety conditions
     if (millis() - lastFanCheck >= FAN_CHECK_INTERVAL)
     {
         lastFanCheck = millis();
 
-        // PRIORITY 1: Fan MUST stay ON during gas alerts
+        // PRIORITY 1: Emergency situations - Fan MUST stay ON
         if (gasAlertActive || valveClosed)
         {
-            digitalWrite(RELAY_PIN, HIGH);
-            return; // Skip temperature logic during emergencies
+            digitalWrite(RELAY_PIN, HIGH); // Fan ON for ventilation
+            return;
         }
 
-        // PRIORITY 2: Temperature-based fan control for comfort
-        if (temperature > TEMP_HOT) // >30°C = turn fan ON
+        // PRIORITY 2: Normal temperature-based control
+        if (temperature > 35.0) // >35°C = turn fan ON
         {
             digitalWrite(RELAY_PIN, HIGH);
         }
-        else if (temperature < TEMP_COOL) // <25°C = turn fan OFF
+        else // <=35°C = turn fan OFF
         {
             digitalWrite(RELAY_PIN, LOW);
         }
-        // Between 25-30°C: maintain current fan state (energy saving)
     }
 }
 
@@ -274,7 +245,7 @@ void processGasReading()
     {
         // COOKING MODE
         // In cooking mode, higher thresholds are allowed
-        if (gasValue < COOKING_WARNING_THRESHOLD) // <1000 PPM = SAFE
+        if (gasValue < BASE_THRESHOLD) // <1000 PPM = SAFE
         {
             if (gasAlertActive || valveClosed)
             {
@@ -283,7 +254,7 @@ void processGasReading()
             }
             digitalWrite(BUZZER_PIN, LOW);
         }
-        else if (gasValue >= COOKING_WARNING_THRESHOLD && gasValue < COOKING_DANGER_THRESHOLD)
+        else if (gasValue >= BASE_THRESHOLD && gasValue < COOKING_DANGER_THRESHOLD)
         {
             // 1000-3000 PPM = WARNING (normal cooking levels)
             if (!gasAlertActive)
@@ -344,11 +315,18 @@ void deactivateSafetyMode()
 
 void publishData()
 {
-    // Publish sensor data to MQTT for web dashboard
     char dataBuffer[256];
 
     // Fan status: 1=ON, 0=OFF
     int fanStatus = digitalRead(RELAY_PIN) == HIGH ? 1 : 0;
+
+    // DEBUG: Print to Serial Monitor
+    Serial.print("DEBUG - Gas: ");
+    Serial.print(gasValue);
+    Serial.print(" | Threshold sending: ");
+    Serial.print(BASE_THRESHOLD);
+    Serial.print(" | Temp: ");
+    Serial.println(temperature);
 
     // Format JSON data
     snprintf(dataBuffer, sizeof(dataBuffer),

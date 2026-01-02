@@ -9,13 +9,12 @@
 #define MQTT_SERVER "" // - CHANGE THIS IP ADDRESS
 #define MQTT_PORT 1883
 #define MQTT_USER "esp32_client"
-#define MQTT_PASSWORD ""a
+#define MQTT_PASSWORD ""
 
 // MQTT Topics
 #define TOPIC_GAS_DATA "gas_sensor/data"
 #define TOPIC_GAS_ALERT "gas_sensor/alerts"
 #define TOPIC_MODE_STATUS "system/mode"
-#define TOPIC_ACTUATOR_CMD "system/commands"
 
 // Pin Definitions
 #define MQ2_PIN 15
@@ -29,8 +28,6 @@
 #define BASE_THRESHOLD 1000
 #define COOKING_WARNING_THRESHOLD 1000
 #define COOKING_DANGER_THRESHOLD 3000
-#define TEMP_HOT 30.0
-#define TEMP_COOL 25.0
 
 // Servo positions
 #define VALVE_OPEN 0
