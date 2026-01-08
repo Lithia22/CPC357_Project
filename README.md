@@ -5,53 +5,107 @@
 IoT-based smart kitchen gas leak detection system designed to enhance safety, contributing to **UN Sustainable Development Goal (SDG) 11: Sustainable Cities and Communities**.
 
 **System Features:**
+
 - Real-time gas leak detection and monitoring
 - Automatic safety response (valve shutoff, ventilation, buzzer alert)
 - Emergency SMS and phone call alerts
 - Cloud-based data storage
 - Web dashboard for remote monitoring
 
-**Technology Stack:**
-- **Hardware**: ESP32 microcontroller, MQ2 gas sensor, DHT11 temperature sensor
-- **Cloud**: Google Cloud Platform (GCP) VM, Mosquitto MQTT Broker
-- **Database**: Supabase (PostgreSQL)
-- **Frontend**: React.js with ShadcnUI components
-- **Communication Protocol**: MQTT (Message Queue Telemetry Transport)
-- **Emergency Alerts**: Twilio API
-
 ## Prerequisites
 
-- ESP32-S3 development board
-- PlatformIO IDE (VS Code extension)
-- Node.js v18 or higher
-- Google Cloud Platform account
-- Supabase account
-- Twilio account
+- **ESP32-S3** development board
+- **VS Code** with PlatformIO extension
+- **Node.js** v20 or higher
+- **Google Cloud Platform** account
+- **Supabase** account
+- **Twilio** account
 
-## Setup Instructions
+## Project Structure
 
-### Step 1: Quick Start and Configure ESP32
+```
+CPC357_Project/
+├── ESP32/                   # ESP32 firmware (PlatformIO)
+│   ├── platformio.ini       # PlatformIO configuration
+│   ├── include/config.h     # WiFi & MQTT configuration
+│   └── src/main.cpp         # Main cpp firmware code
+├── backend/                 # Node.js bridge (runs on GCP VM)
+│   ├── mqtt-bridge.js       # Main MQTT to Supabase bridge
+│   ├── twilio-service.js    # Emergency call service
+│   ├── package.json         # Backend Dependencies
+│   └── .env                 # Environment variables
+├── frontend/                # React dashboard
+│   └── package.json         # Frontend dependencies
+│   └── .env.local           # Environment variables
+└── README.md                # This documentation
+```
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/Lithia22/CPC357_Project.git
-   cd CPC357_Project
-   ```
+---
 
-2. **Configure ESP32:**
+# Part A: Local Development Setup (Your Computer)
+
+## Step 1: Clone Repository for Development
+
+```bash
+git clone https://github.com/Lithia22/CPC357_Project.git
+cd CPC357_Project
+```
+
+## Step 2: Configure ESP32 Firmware
+
+1. **Open the project in VS Code** with PlatformIO extension installed
+2. **Configure WiFi and MQTT settings:**
+
    - Open `ESP32/include/config.h`
-   - Update these values:
+   - Update with your credentials:
 
    ```cpp
    #define WIFI_SSID "YOUR_WIFI_NAME"
    #define WIFI_PASSWORD "YOUR_WIFI_PASSWORD"
-   #define MQTT_SERVER "YOUR_GCP_VM_IP"  // From Step 3.2
+   #define MQTT_SERVER "YOUR_GCP_VM_IP"
    ```
-   
-### Step 2: Supabase Database Setup
 
-1. Create account at [supabase.com](https://supabase.com)
-2. Run SQL in Supabase SQL Editor:
+3. **Upload firmware to ESP32 (VS code Terminal 1):**
+   - Connect ESP32 via USB
+   - In VS code GUI click **✓** to build then **➔** to upload
+   - Open Serial Monitor (plug icon) to verify connection
+
+## Step 3: Set Up React Dashboard (VS code Terminal 2)
+
+```bash
+cd frontend
+npm install
+
+# Create .env.local file:
+touch .env.local
+```
+
+Add:
+
+```
+REACT_APP_MQTT_BROKER=ws://YOUR_GCP_VM_IP:9001
+REACT_APP_SUPABASE_URL=your_supabase_project_url
+REACT_APP_SUPABASE_ANON_KEY=your_supabase_anon_key
+```
+
+**Note:** You'll get the GCP VM IP and Supabase credentials in the next sections.
+
+```bash
+# Start the development server
+npm start
+```
+
+Dashboard will open at `http://localhost:3000`
+
+---
+
+# Part B: Cloud Services Setup
+
+## Step 4: Supabase Database Setup
+
+1. **Create account** at [supabase.com](https://supabase.com)
+2. **Create new project** and wait for it to initialize
+3. **Create database tables** in SQL Editor:
 
 ```sql
 CREATE TABLE sensor_readings (
@@ -75,25 +129,43 @@ CREATE TABLE alerts (
 );
 ```
 
-3. Go to **Authentication → Users** → Click **"Add User"**:
+4. **Set up authentication:**
 
-- **Email**: `user@kitchen.com`
-- **Password**: `user123`
-- Click **"Create User"**
+   - Go to **Authentication → Users** → **Add User**
+   - Email: `user@kitchen.com`
+   - Password: `user123`
+   - Click **"Create User"**
 
-**Note**: Disable email confirmation in **Authentication → Providers → Email** → Turn OFF "Confirm email" → Save
+   **Note**: Disable email confirmation in **Authentication → Providers → Email** → Turn OFF "Confirm email" → Save
 
-4. Get API keys from **Project Settings → API**:
+5. **Get API credentials:**
+   - Go to **Project Settings → API**
+   - **Project URL** → Use as `SUPABASE_URL`
+   - **anon public key** → Use as `SUPABASE_KEY`
 
-- **Project URL** → Use as `SUPABASE_URL` in Step 3.3
-- **anon public** key → Use as `SUPABASE_KEY` in Step 3.3
+## Step 5: Twilio Setup for Emergency Alerts
 
-### Step 3: GCP Cloud Deployment
+1. **Create account** at [twilio.com](https://twilio.com) (free trial available)
+2. **Buy a phone number:**
+   - Go to **Console → Phone Numbers → Buy a Number**
+   - Choose a number with **Voice** capability
+   - Click "Buy" (trial accounts get $15 credit)
+3. **Get API credentials:**
+   - Go to **Console → Account → API keys & tokens**
+   - Save: **Account SID**, **Auth Token**, **Phone Number**
+4. **Verify emergency contacts:**
+   - Go to **Phone Numbers → Verified Caller IDs**
+   - Add and verify your emergency contact numbers
+   - **Note:** Trial accounts can only call verified numbers
 
-#### **3.1 Create VM Instance & Firewall**
+---
 
-1. Go to **Google Cloud Console → Compute Engine → VM Instances**
-2. Click **"Create Instance"**
+# Part C: GCP Cloud Deployment (Virtual Machine)
+
+## Step 6: Create VM Instance & Firewall
+
+1. **Go to Google Cloud Console** → Compute Engine → VM Instances
+2. **Click "Create Instance":**
 
 | Setting          | Configuration                    |
 | ---------------- | -------------------------------- |
@@ -103,8 +175,7 @@ CREATE TABLE alerts (
 | **Boot disk**    | Ubuntu 22.04 LTS (x86/64), 10 GB |
 
 3. Click **"Create"**
-
-4. Configure Firewall:
+4. **Configure Firewall Rules:**
    - Go to **VPC Network → Firewall**
    - Click **"Create Firewall Rule"**
 
@@ -119,18 +190,23 @@ CREATE TABLE alerts (
 
 5. Click **"Create"**
 
-#### **3.2 SSH Setup & MQTT Broker**
+## Step 7: SSH Setup & Install Dependencies
 
 ```bash
 # In GCP Console, click "SSH" button next to your VM
 sudo apt update && sudo apt upgrade -y
-sudo apt install mosquitto mosquitto-clients nano -y
+sudo apt install mosquitto mosquitto-clients nano git -y
+
+# Install Node.js 20+ (Supabase requires Node 20+)
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt install nodejs -y
+node --version  # Should show v20.x.x
 
 # Configure Mosquitto:
 sudo nano /etc/mosquitto/mosquitto.conf
 ```
 
-Add these lines:
+Add these lines to the config file:
 
 ```ini
 listener 1883 0.0.0.0
@@ -147,70 +223,20 @@ Save (`Ctrl+O`, `Enter`, `Ctrl+X`) and restart:
 sudo systemctl restart mosquitto
 sudo systemctl enable mosquitto
 
-# Get VM Public IP:
+# Get your VM's public IP
 curl -s ifconfig.me
-# Copy this IP for ESP32 config (Step 1)
-
-# Install Node.js:
-curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-sudo apt install nodejs -y
-node --version  # Should show v18.x.x
 ```
 
-#### **3.3 Twilio Account Setup**
-
-1. **Create Twilio Account:**
-
-   - Go to [twilio.com](https://twilio.com) and sign up
-   - Verify your email and phone number
-
-2. **Get Twilio Phone Number:**
-
-   - Go to **Console → Phone Numbers → Buy a Number**
-   - Choose a number with Voice capability
-   - Click "Buy" (trial accounts get $15 credit)
-
-3. **Get API Credentials:**
-
-   - Go to **Console → Account → API keys & tokens**
-   - Copy:
-     - **Account SID**
-     - **Auth Token**
-     - **Phone Number**
-
-4. **Verify Emergency Numbers:**
-
-   - Go to **Console → Phone Numbers → Verified Caller IDs**
-   - Add and verify your emergency contact numbers
-   - **Note:** Trial accounts can only call verified numbers
-
-#### **3.4 Deploy MQTT Bridge**
+## Step 8: Deploy Backend Service
 
 ```bash
-mkdir -p ~/gas-detection-backend
-cd ~/gas-detection-backend
+# Clone the repository on your GCP VM
+git clone https://github.com/Lithia22/CPC357_Project.git
+cd CPC357_Project/backend
 
-# Create package.json:
-nano package.json
-```
+# Install Node.js dependencies
+npm install
 
-Add:
-
-```json
-{
-  "name": "mqtt-bridge",
-  "version": "1.0.0",
-  "main": "mqtt-bridge.js",
-  "dependencies": {
-    "mqtt": "^4.3.7",
-    "@supabase/supabase-js": "^2.39.0",
-    "twilio": "^4.19.4",
-    "dotenv": "^16.3.1"
-  }
-}
-```
-
-```bash
 # Create .env file:
 nano .env
 ```
@@ -228,23 +254,14 @@ EMERGENCY_CONTACT=receiver_number
 ```
 
 ```bash
-npm install
+# Test the bridge connection (see if its successfully connected):
+node mqtt-bridge.js
 ```
 
-### **3.5 Copy Backend Files to VM:**
-
-**In GCP SSH terminal:**
+## Step 9: Set Up Auto-Start Service
 
 ```bash
-# 1. Create mqtt-bridge.js on VM
-nano ~/gas-detection-backend/mqtt-bridge.js
-# Paste content from backend/mqtt-bridge.js in project files
-
-# 2. Create twilio-service.js on VM
-nano ~/gas-detection-backend/twilio-service.js
-# Paste content from backend/twilio-service.js in project files
-
-# 3. Create systemd service file
+# Create systemd service file
 sudo nano /etc/systemd/system/mqtt-bridge.service
 ```
 
@@ -258,11 +275,13 @@ After=network.target mosquitto.service
 [Service]
 Type=simple
 User=YOUR_USERNAME
-WorkingDirectory=/home/YOUR_USERNAME/gas-detection-backend
-EnvironmentFile=/home/YOUR_USERNAME/gas-detection-backend/.env
+WorkingDirectory=/home/YOUR_USERNAME/CPC357_Project/backend
+EnvironmentFile=/home/YOUR_USERNAME/CPC357_Project/backend/.env
 ExecStart=/usr/bin/node mqtt-bridge.js
 Restart=always
 RestartSec=10
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
@@ -282,34 +301,3 @@ sudo systemctl status mqtt-bridge
 # View logs:
 sudo journalctl -u mqtt-bridge -f
 ```
-
-### Step 4: React Dashboard Setup
-
-```bash
-# On local machine:
-cd frontend
-npm install
-
-# Configure environment:
-nano .env.local
-```
-
-Add:
-
-```
-REACT_APP_MQTT_BROKER=ws://YOUR_GCP_VM_IP:9001
-REACT_APP_SUPABASE_URL=your_supabase_project_url
-REACT_APP_SUPABASE_ANON_KEY=your_supabase_anon_key
-```
-
-```bash
-npm start
-```
-
-### Step 5: ESP32 Firmware Upload
-
-1. Open `ESP32` in VS Code with PlatformIO extension
-2. Click ✓ button to compile
-3. Connect ESP32 via USB
-4. Click ➔ button to upload
-5. Click PlatformIO serial monitor button for output
