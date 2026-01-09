@@ -123,8 +123,18 @@ void reconnectMQTT()
 
     lastAttempt = millis();
 
+    Serial.print("Attempting MQTT connection...");
+    
     String clientId = "ESP32-GasDetector-";
     clientId += String(random(0xffff), HEX);
+    
+    if (mqttClient.connect(clientId.c_str(), MQTT_USER, MQTT_PASSWORD)) {
+        Serial.println("connected");
+    } else {
+        Serial.print("failed, rc=");
+        Serial.print(mqttClient.state());
+        Serial.println(" try again in 5 seconds");
+    }
 }
 
 void readSensors()
